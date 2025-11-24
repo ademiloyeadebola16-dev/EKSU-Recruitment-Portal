@@ -1,0 +1,180 @@
+[
+    {
+        "email": "tolulope23@gmail.com",
+        "job_id": "0",
+        "job_title": "Lecturer I",
+        "department": "Data Science",
+        "qualification_required": "M.sc",
+        "academic_qualification": "M.Sc",
+        "professional_body": "Teacher Registration Council of Nigeria (TRCN)",
+        "cover_letter": "ghjglhl;obhhvvvhhjv nmhbhbn",
+        "first_name": "Tolulope",
+        "middle_name": "Titi",
+        "last_name": "Ajayi",
+        "phone": "76090088766",
+        "dob": "1992-12-06",
+        "pob": "sarki",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "state": "Ekiti",
+        "lga": "Oye",
+        "publications": "6",
+        "experience_years": "7",
+        "cv": "uploads\/CV_1762847392_6912eaa021baf.pdf",
+        "referees": [
+            {
+                "name": "gfdfhdhdd",
+                "phone": "ggggggg",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "Lecturer"
+            },
+            {
+                "name": "fgdmjfkfkkkklkcn",
+                "phone": "78930-23333",
+                "email": "jsfbghg@gmail.com",
+                "occupation": "hhfhdjukjhijhde"
+            }
+        ],
+        "status": "Disqualified",
+        "date": "2025-11-11 08:49:52",
+        "remarks": "Applicant does not meet one or more job requirements:\n- Academic qualification does not meet minimum requirement (m.sc).\n- Teaching experience meets or exceeds requirement.\n- Publication count meets or exceeds requirement.\n- Applicant is not registered with the required professional body (teacher's registration council of nigeria (trcn)).",
+        "reason": "Disqualified: You applied for more than 2 job positions.",
+        "status_visible": false,
+        "evaluation_score": "<br \/><b>Warning<\/b>:  Undefined array key ",
+        "evaluation_remark": "<br \/>\r\n<b>Warning<\/b>:  Undefined array key \"evaluation_remark\" in <b>C:\\Users\\HP\\Desktop\\XAMPP\\htdocs\\My code\\My PHP codes\\view_applicant_detail.php<\/b> on line <b>168<\/b><br \/>\r\n",
+        "application_status": "Under Review"
+    },
+    {
+        "email": "ademiloyeadebola16@gmail.com",
+        "job_id": "0",
+        "job_title": "Lecturer I",
+        "department": "Data Science",
+        "qualification_required": "M.sc",
+        "academic_qualification": "M.sc",
+        "professional_body": "Teacher's Registration Council of Nigeria (TRCN)",
+        "cover_letter": "ggkg;klnkk\/n,",
+        "first_name": "Ademiloye",
+        "middle_name": "Iyabo",
+        "last_name": "Adebola",
+        "phone": "76090088766",
+        "dob": "1991-11-12",
+        "pob": "oke",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "state": "Ekiti",
+        "lga": "Oye",
+        "publications": "6",
+        "experience_years": "7",
+        "cv": "uploads\/CV_1762849997_6912f4cda8bc3.pdf",
+        "referees": [
+            {
+                "name": "dhgvjhj",
+                "phone": "3979877232",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "Lecturer"
+            },
+            {
+                "name": "ffhjjkl;kjjj",
+                "phone": "78930-23333",
+                "email": "jsfbghg@gmail.com",
+                "occupation": "Head of Department"
+            }
+        ],
+        "status": "Qualified",
+        "date": "2025-11-11 09:33:17",
+        "reason": "All job requirements were successfully met.",
+        "status_visible": false
+    },
+    {
+        "email": "tolulope23@gmail.com",
+        "job_id": "1",
+        "job_title": "College of Medicine",
+        "department": "Community Medicine",
+        "qualification": "PH.D",
+        "requirement_qualification": "Ph.D",
+        "academic_qualification": "PH.D",
+        "professional_body": "NMA",
+        "cover_letter": "fgghhbjbbbj bbnbbnbnbjvbvvbjjbhjbjhbjbnbn bbj ",
+        "first_name": "Tolulope",
+        "middle_name": "Titi",
+        "last_name": "Ajayi",
+        "phone": "78899000066",
+        "dob": "1995-11-23",
+        "pob": "sarki",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "state": "oyo",
+        "lga": "sarki",
+        "publications": "20",
+        "experience_years": "15",
+        "cv": "uploads\/CV_1763540048_691d7c50054ae.docx",
+        "referees": [
+            {
+                "name": "Ademiloye Adebola",
+                "phone": "344343",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "mfkf'kjskkdfs"
+            },
+            {
+                "name": "afghjkjkklk",
+                "phone": "465567777",
+                "email": "jsfbghg@gmail.com",
+                "occupation": "vbjukkhh"
+            }
+        ],
+        "internal_status": "Qualified",
+        "status": "Disqualified",
+        "reason": "Disqualified: You applied for more than 2 job positions.",
+        "qualification_similarity": 100,
+        "body_similarity": 100,
+        "custom_requirements": [],
+        "status_visible": false,
+        "date": "2025-11-19 09:14:08"
+    },
+    {
+        "email": "tolulope23@gmail.com",
+        "job_id": "2",
+        "job_title": "Academic",
+        "department": "Department of Medical Biochemistry",
+        "qualification": "PH.D",
+        "requirement_qualification": "Ph.D",
+        "academic_qualification": "PH.D",
+        "professional_body": "NMA",
+        "cover_letter": "dgghjj sdffg hhjjj",
+        "first_name": "Tolulope",
+        "middle_name": "Titi",
+        "last_name": "Ajayi",
+        "phone": "76090088766",
+        "dob": "1777-04-05",
+        "pob": "sarki",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "state": "Ekiti",
+        "lga": "sarki",
+        "publications": "34",
+        "experience_years": "20",
+        "cv": "uploads\/CV_1763540525_691d7e2d2595e.pdf",
+        "referees": [
+            {
+                "name": "ghj",
+                "phone": "566",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "reqeq"
+            },
+            {
+                "name": "fhjk",
+                "phone": "78930-23333",
+                "email": "jhjkkbkbvbh@ghjnb.com",
+                "occupation": "hvhdfhf"
+            }
+        ],
+        "internal_status": "Qualified",
+        "status": "Disqualified",
+        "reason": "Disqualified: You applied for more than 2 job positions.",
+        "qualification_similarity": 100,
+        "body_similarity": 100,
+        "custom_requirements": [],
+        "status_visible": false,
+        "date": "2025-11-19 09:22:05"
+    }
+]

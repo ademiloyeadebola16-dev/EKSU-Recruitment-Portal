@@ -1,0 +1,20 @@
+[
+    {
+        "username": "admin",
+        "password": "$2y$10$....."
+    },
+    {
+        "username": "Adebola1",
+        "password": "$2y$10$7yAP3ei6mbQ7kQGDyUZIneIPwa1Dfka9y59Ra7BMldxgWTj7wJf2q"
+    },
+    {
+        "name": "Ademiloye Adebola",
+        "email": "ademiloyeadebola16@gmail.com",
+        "password": "$2y$10$zf\/CpdF1ssxI8UAtd1lFAeEQImqLE98EeLfmF3bL8mLssLrRCBg6C"
+    },
+    {
+        "name": "Tolulope Ajayi",
+        "email": "tolulope23@gmail.com",
+        "password": "$2y$10$6ChS7hXD94DHKntBRjWqiOwVn2APF0p7yVjPxc9y8eabDj4foakTm"
+    }
+]

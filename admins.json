@@ -1,0 +1,29 @@
+[
+    {
+        "id": 1,
+        "email": "firstadmin@example.com",
+        "name": "Primary Admin",
+        "password_hash": "$2y$10$REPLACE_WITH_HASHED_PASSWORD",
+        "approved": true,
+        "is_super": true,
+        "date": "2025-11-20 00:00:00"
+    },
+    {
+        "id": 3,
+        "email": "princessadebola4mat@gmail.com",
+        "name": "Primary Admin",
+        "password_hash": "$2y$10$FBkYfqjLHwv\/0jsQktTc3e1Z1tZVitNAVVllHHndPwC7v1Up1cD0C",
+        "approved": true,
+        "is_super": true,
+        "date": "2025-11-20 19:02:20"
+    },
+    {
+        "id": 4,
+        "name": "Ademiluyi Busayo",
+        "email": "ademiluyibusayo24@gmail.com",
+        "password_hash": "$2y$10$lAEesVL02GQ9GyIr0i7q9u2wFjc7xk35C9ncCwCkqEdaIAZckAArO",
+        "approved": true,
+        "is_super": false,
+        "date": "2025-11-23 20:35:58"
+    }
+]
