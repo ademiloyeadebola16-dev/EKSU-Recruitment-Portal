@@ -1,49 +1,84 @@
 <?php
 session_start();
-$admins_file = 'admins.json';
-$admins = file_exists($admins_file) ? json_decode(file_get_contents($admins_file), true) : [];
 
+$admins_file = 'admins.json';
+$admins = file_exists($admins_file)
+    ? json_decode(file_get_contents($admins_file), true)
+    : [];
+
+$error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = strtolower(trim($_POST['email'] ?? ''));
     $password = $_POST['password'] ?? '';
 
     foreach ($admins as $admin) {
-        if (isset($admin['email']) && strtolower($admin['email']) === $email) {
-            if (!($admin['approved'] ?? false)) {
-                $error = "Your account is pending admin approval.";
-                break;
-            }
-            if (password_verify($password, $admin['password_hash'])) {
-                $_SESSION['admin'] = $admin['email'];
-                $_SESSION['admin_id'] = $admin['id'];
-                $_SESSION['is_super'] = !empty($admin['is_super']);
+        if (strtolower($admin['email']) === $email) {
+
+            if (password_verify($password, $admin['password'])) {
+
+                $_SESSION['admin'] = [
+                    'id'    => $admin['id'],
+                    'email' => $admin['email'],
+                    'role'  => $admin['role']
+                ];
+
                 header("Location: admin.php");
                 exit();
             } else {
-                $error = "Invalid credentials.";
+                $error = "Invalid email or password.";
+                break;
             }
         }
     }
-    if (empty($error)) $error = "Account not found.";
+
+    if (!$error) {
+        $error = "Invalid email or password.";
+    }
 }
 ?>
+
 <!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>Admin Login</title>
 <style>
-body { font-family: Arial, sans-serif; background:#f4f7fb; }
-.container { max-width:420px; margin:50px auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.08); }
-input { width:100%; padding:10px; margin:8px 0; border:1px solid #ccc; border-radius:5px; }
-button { background:#800000; color:#fff; padding:10px; border:none; border-radius:5px; cursor:pointer; width:100%; }
-button:hover { background:#660000; }
-.notice { color:#800000; margin:8px 0; }
-h2 { color:#800000; text-align:center; }
-a { color:#800000; text-decoration:none; }
-a:hover { text-decoration:underline; }
+body {font-family: Arial; background:#eef1f5;}
+.container {max-width:400px;margin:80px auto;background:white;padding:25px;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,0.1);}
+input {width:100%;padding:10px;margin:10px 0;border:1px solid #ccc;border-radius:5px;}
+button {width:100%;padding:10px;background:#800000;color:white;border:none;border-radius:5px;cursor:pointer;}
+button:hover {background:#800000;}
+a {color:#800000;text-decoration:none;}
+nav {
+      background: #800000; 
+      color: rgb(255, 255, 255);
+      padding: 15px 10%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .nav-container {
+      display: flex;
+      align-items: center;  /* vertically center items */
+      gap: 15px;            /* space between logo and text */
+    }
+    .nav-container img {
+      width: 70px;
+      height: 70px;
+      border-radius: 5px; /* optional: rounded edges */
+    }
 
-/* Password container fix */
+    nav h1 {
+      font-size: 22px;
+      margin: 0;
+    }
+    .nav-text h5 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: normal;
+      color: #ddd; /* lighter gray subtitle */
+    }
+    /* Password container fix */
 .password-wrapper {
     position: relative;
 }
@@ -59,6 +94,18 @@ a:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
+  <nav>
+   <div class="nav-container">
+      <img src="logo.jfif" alt="Site Logo">
+      <div class="nav-text">
+        <h1>Ekiti State University, Ado-Ekiti</h1>
+        <h5>Job Recruitment Portal</h5>
+      </div>
+    </div>
+     <div>
+       <a href="index.php" style="background:white; color:#004080; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">Home</a>
+      </div>
+    </nav>
 
 <div class="container">
   <h2>Admin Login</h2>
@@ -81,9 +128,10 @@ a:hover { text-decoration:underline; }
     <button type="submit">Login</button>
   </form>
 
-  <p style="text-align:center; margin-top:10px;">
-    <a href="admin_signup.php">Request admin access</a>
-  </p>
+  <p style="text-align:center; margin-top:10px; color:#777;">
+  Admin access is granted by the Super Administrator.
+</p>
+
 </div>
 
 <script>

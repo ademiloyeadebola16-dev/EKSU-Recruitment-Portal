@@ -16,62 +16,131 @@ $email      = trim($_POST['email'] ?? '');
 $job_title  = trim($_POST['job_title'] ?? '');
 $date       = date('Y-m-d H:i:s');
 
+// Professional Information
+$qualification = trim($_POST['academic_qualification'] ?? '');
+$qualification_other = trim($_POST['academic_qualification_other'] ?? '');
+$professional_body = trim($_POST['professional_body'] ?? '');
+$publications = trim($_POST['publications'] ?? '');
+$experience = trim($_POST['experience'] ?? '');
+$cover_letter = trim($_POST['cover_letter'] ?? '');
+
+// Handle "Other (specify)"
+if ($qualification === 'Other' && $qualification_other !== '') {
+    $qualification = $qualification_other;
+}
+
 if (!$first_name || !$last_name || !$email || !$job_title) {
     die("Please fill all required fields.");
 }
 
-// Add application to the JSON
+/* ---------------------------------------------
+   GENERATE APPLICANT NUMBER  (NEW CODE ADDED)
+   --------------------------------------------- */
+
+// Get current year
+$year = date("Y");
+
+// Generate new sequence number
+$last_number = 0;
+
+if (!empty($applications)) {
+    $numbers = [];
+
+    foreach ($applications as $app) {
+        if (isset($app['applicant_number'])) {
+            $parts = explode("/", $app['applicant_number']);
+            $num = end($parts); // last part (0001, 0002...)
+            if (is_numeric($num)) {
+                $numbers[] = (int)$num;
+            }
+        }
+    }
+
+    if (!empty($numbers)) {
+        $last_number = max($numbers);
+    }
+}
+
+$new_number = $last_number + 1;
+
+// Format as 4 digits with leading zeros
+$formatted_number = str_pad($new_number, 4, '0', STR_PAD_LEFT);
+
+// Final Applicant Number
+$applicant_number = "EKSU/APP/{$year}/{$formatted_number}";
+
+/* ---------------------------------------------
+   BUILD APPLICATION ENTRY
+   --------------------------------------------- */
+
 $new_application = [
+    'applicant_number' => $applicant_number, // NEW FIELD
     'first_name' => $first_name,
     'last_name'  => $last_name,
     'email'      => $email,
     'job_title'  => $job_title,
-    'status'     => 'Pending',
+    'academic_qualification' => $qualification,
+    'professional_body' => $professional_body,
+    'publications' => $publications,
+    'experience' => $experience,
+    'cover_letter' => $cover_letter,
+    'status' => 'Pending',
     'internal_status' => '',
-    'reason'     => '',
-    'date'       => $date
+    'reason' => '',
+    'date'  => $date
 ];
 
+// Save application
 $applications[] = $new_application;
 file_put_contents($applications_file, json_encode($applications, JSON_PRETTY_PRINT));
 
-// -----------------------------
-// Send email notification via SMTP
-// -----------------------------
+/* ---------------------------------------------
+   SEND EMAIL NOTIFICATION (UPDATED)
+   --------------------------------------------- */
+
 $mail = new PHPMailer(true);
 
 try {
-    // SMTP configuration
     $mail->isSMTP();
-    $mail->Host       = 'smtp.gmail.com';       // Use your SMTP server
+    $mail->Host       = 'smtp.gmail.com';
     $mail->SMTPAuth   = true;
-    $mail->Username   = 'your-email@gmail.com'; // Replace with your SMTP email
-    $mail->Password   = 'your-email-password';  // Use app password if Gmail
+    $mail->Username   = 'your-email@gmail.com';
+    $mail->Password   = 'your-email-password'; 
     $mail->SMTPSecure = 'tls';
     $mail->Port       = 587;
 
-    // Sender & recipient
     $mail->setFrom('noreply@eksu.edu.ng', 'EKSU Recruitment');
     $mail->addAddress($email, "{$first_name} {$last_name}");
 
-    // Content
     $mail->isHTML(true);
-    $mail->Subject = "Your application is under review - EKSU Recruitment";
-    $mail->Body    = "
+    $mail->Subject = "Your EKSU Applicant Number";
+
+    $mail->Body = "
         <p>Dear {$first_name} {$last_name},</p>
-        <p>Thank you for submitting your application for the position of <strong>{$job_title}</strong>.</p>
-        <p>Your application is currently <strong>under review</strong> by our recruitment team.</p>
-        <p>We will notify you once the review is complete.</p>
+
+        <p>Thank you for applying for the position of <strong>{$job_title}</strong>.</p>
+
+        <p>Your Applicant Number is:</p>
+
+        <h2 style='color:#800000;'>{$applicant_number}</h2>
+
+        <p>Please keep this number safe. You will need it for all future communication.</p>
+
+        <p>Your application is currently <strong>under review</strong>.</p>
+
         <br>
         <p>Best regards,<br>EKSU Recruitment Team</p>
     ";
 
     $mail->send();
-    $_SESSION['message'] = "Application submitted successfully. Confirmation email sent.";
-} catch (Exception $e) {
-    $_SESSION['message'] = "Application submitted successfully. Email could not be sent: {$mail->ErrorInfo}";
+    $_SESSION['message'] = "Application submitted successfully. Your Applicant Number is: {$applicant_number}";
+} 
+catch (Exception $e) {
+    $_SESSION['message'] = "Application submitted. Email error: " . $mail->ErrorInfo;
 }
 
-// Redirect to confirmation page
-header("Location: application_form.php");
+// Redirect
+header("Location: application_form.php?applicant_number=" . urlencode($applicant_number));
 exit();
+
+?>

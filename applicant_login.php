@@ -1,4 +1,10 @@
 <?php
+if (isset($_GET['reset']) && $_GET['reset'] === 'success') {
+    echo "<p style='color:green;'><strong>Password reset successful. You may now log in.</strong></p>";
+}
+?>
+
+<?php
 session_start();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -23,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // If we reach here, login failed
     $error = "Invalid email or password!";
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -65,6 +72,19 @@ nav {
       font-weight: normal;
       color: #ddd; /* lighter gray subtitle */
     }
+    /* Password container fix */
+.password-wrapper {
+    position: relative;
+}
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 15px;
+    color: #555;
+}
 </style>
 </head>
 <body>
@@ -77,7 +97,7 @@ nav {
       </div>
     </div>
      <div>
-       <a href="index.php" style="background:white; color:#004080; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">🏠 Home</a>
+       <a href="index.php" style="background:white; color:#004080; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">Home</a>
       </div>
     </nav>
 <div class="container">

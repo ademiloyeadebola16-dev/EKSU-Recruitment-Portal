@@ -1,31 +1,153 @@
 <?php
 session_start();
 
-// Load admins
-$admins_file = 'admins.json';
-$admins = file_exists($admins_file) ? json_decode(file_get_contents($admins_file), true) : [];
-
-// Verify current admin session
-$current = null;
-foreach ($admins as $a) {
-    if ($a['email'] === ($_SESSION['admin'] ?? '')) {
-        $current = $a;
-        break;
-    }
-}
-
-if (!$current || empty($current['approved'])) {
-    session_unset();
-    session_destroy();
-    header("Location: admin_login.php?error=not_approved");
+// AUTH CHECK (NEW SYSTEM)
+if (!isset($_SESSION['admin'])) {
+    header("Location: admin_login.php");
     exit();
 }
 
-$is_super = $current['is_super'] ?? false;
+$currentAdmin = $_SESSION['admin'];
+$is_super = ($currentAdmin['role'] === 'super');
 
+// Load admins (for management UI)
+$admins_file = 'admins.json';
+$admins = file_exists($admins_file) ? json_decode(file_get_contents($admins_file), true) : [];
+
+
+// Handle admin actions (super admin only)
+if ($is_super && $_SERVER['REQUEST_METHOD'] === 'POST') {
+
+
+// CREATE ADMIN
+if (isset($_POST['create_admin'])) {
+$email = strtolower(trim($_POST['email']));
+$password = $_POST['password'];
+
+
+foreach ($admins as $a) {
+if ($a['email'] === $email) {
+$_SESSION['message'] = 'Admin already exists';
+header('Location: admin.php'); exit();
+}
+}
+
+
+$admins[] = [
+'id' => time(),
+'email' => $email,
+'password' => password_hash($password, PASSWORD_DEFAULT),
+'role' => 'admin',
+'created_at' => date('Y-m-d H:i:s')
+];
+
+
+file_put_contents($admins_file, json_encode($admins, JSON_PRETTY_PRINT));
+$_SESSION['message'] = 'Admin created successfully';
+header('Location: admin.php'); exit();
+}
+
+
+// DELETE ADMIN
+if (isset($_POST['delete_admin'])) {
+$id = $_POST['id'];
+$admins = array_filter($admins, fn($a) => $a['id'] != $id || $a['role'] === 'super');
+file_put_contents($admins_file, json_encode(array_values($admins), JSON_PRETTY_PRINT));
+$_SESSION['message'] = 'Admin deleted';
+header('Location: admin.php'); exit();
+}
+
+
+// RESET PASSWORD
+if (isset($_POST['reset_password'])) {
+foreach ($admins as &$a) {
+if ($a['id'] == $_POST['id']) {
+$a['password'] = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+break;
+}
+}
+file_put_contents($admins_file, json_encode($admins, JSON_PRETTY_PRINT));
+$_SESSION['message'] = 'Password reset successfully';
+header('Location: admin.php'); exit();
+}
+}
+// PROMOTE / DEMOTE / ENABLE / DISABLE ADMINS
+if ($is_super && $_SERVER['REQUEST_METHOD'] === 'POST') {
+
+
+// Promote to super admin
+if (isset($_POST['promote_admin'])) {
+foreach ($admins as &$a) {
+if ($a['id'] == $_POST['id'] && $a['role'] === 'admin') {
+$a['role'] = 'super';
+$_SESSION['message'] = 'Admin promoted to Super Admin';
+break;
+}
+}
+}
+
+
+// Demote super admin
+if (isset($_POST['demote_admin'])) {
+foreach ($admins as &$a) {
+if ($a['id'] == $_POST['id'] && $a['role'] === 'super' && $a['email'] !== $currentAdmin['email']) {
+$a['role'] = 'admin';
+$_SESSION['message'] = 'Super Admin demoted';
+break;
+}
+}
+}
+
+
+// Disable admin
+if (isset($_POST['disable_admin'])) {
+foreach ($admins as &$a) {
+if ($a['id'] == $_POST['id'] && $a['role'] !== 'super') {
+$a['status'] = 'disabled';
+$_SESSION['message'] = 'Admin disabled';
+break;
+}
+}
+}
+
+
+// Enable admin
+if (isset($_POST['enable_admin'])) {
+foreach ($admins as &$a) {
+if ($a['id'] == $_POST['id']) {
+$a['status'] = 'active';
+$_SESSION['message'] = 'Admin enabled';
+break;
+}
+}
+}
+
+
+file_put_contents($admins_file, json_encode($admins, JSON_PRETTY_PRINT));
+header('Location: admin.php'); exit();
+}
 // Load jobs
 $jobs_file = 'jobs.json';
 $jobs = file_exists($jobs_file) ? json_decode(file_get_contents($jobs_file), true) : [];
+$updated = false;
+$now = time();
+
+foreach ($jobs as $i => $job) {
+    if (!empty($job['deadline'])) {
+        if (strtotime($job['deadline']) < $now && !empty($job['is_active'])) {
+            $jobs[$i]['is_active'] = false; // auto-disable
+            $updated = true;
+        }
+    }
+}
+
+if ($updated) {
+    file_put_contents($jobs_file, json_encode(array_values($jobs), JSON_PRETTY_PRINT));
+}
+
+$isClosed = !empty($job['deadline']) && strtotime($job['deadline']) < time();
+$isExpired = !empty($job['deadline']) && strtotime($job['deadline']) < time();
+$isActive  = $job['is_active'] ?? true;
 
 // Handle new job creation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['title'])) {
@@ -83,7 +205,7 @@ th {background:#800000;color:white;}
       <div>
         <h1 style="margin:0;">Ekiti State University, Ado-Ekiti</h1>
         <h5 style="margin:0;color:#ddd;">Job Recruitment Portal</h5>
-        <span>Welcome, <?= htmlspecialchars($_SESSION['admin']) ?> 👋</span>
+       <span>Welcome, <?= htmlspecialchars($currentAdmin['email']) ?> 👋</span>
       </div>
    </div>
    <div>
@@ -101,103 +223,152 @@ th {background:#800000;color:white;}
 <?php endif; ?>
 
 <?php if ($is_super): ?>
-<h2>Admin Management (Super-Admin Only)</h2>
+<h2>Admin Management (Super Admin Only)</h2>
+
+
 <table>
 <tr>
-<th>Name</th>
 <th>Email</th>
-<th>Status</th>
 <th>Role</th>
+<th>Status</th>
 <th>Actions</th>
 </tr>
+
 <?php foreach ($admins as $adm): ?>
 <tr>
-<td><?= htmlspecialchars($adm['name']) ?></td>
 <td><?= htmlspecialchars($adm['email']) ?></td>
 <td>
-<?php if ($adm['approved']): ?><span class="badge approved">Approved</span>
-<?php else: ?><span class="badge pending">Pending</span><?php endif; ?>
+<?php if ($adm['role'] === 'super'): ?>
+<span class="badge super">Super Admin</span>
+<?php else: ?>
+<span class="badge approved">Admin</span>
+<?php endif; ?>
 </td>
 <td>
-<?php if ($adm['is_super']): ?><span class="badge super">Super Admin</span>
-<?php else: ?>Admin<?php endif; ?>
+<?php if (($adm['status'] ?? 'active') === 'disabled'): ?>
+<span class="badge pending">Disabled</span>
+<?php else: ?>
+<span class="badge approved">Active</span>
+<?php endif; ?>
 </td>
 <td>
-<?php if (!$adm['approved']): ?>
-    <a href="approve_admin.php?id=<?= $adm['id'] ?>"><button class="approve-btn manage-btn">Approve</button></a>
-    <form action="reject_admin.php" method="POST" style="display:inline;" onsubmit="return confirm('Reject this admin?');">
-        <input type="hidden" name="id" value="<?= $adm['id'] ?>">
-        <button type="submit" class="reject-btn manage-btn">Reject</button>
-    </form>
+<?php if ($adm['email'] !== $currentAdmin['email']): ?>
+
+
+<!-- Promote / Demote -->
+<?php if ($adm['role'] === 'admin'): ?>
+<form method="post" style="display:inline;">
+<input type="hidden" name="id" value="<?= $adm['id'] ?>">
+<button class="promote-btn manage-btn" name="promote_admin">Promote</button>
+</form>
+<?php else: ?>
+<form method="post" style="display:inline;">
+<input type="hidden" name="id" value="<?= $adm['id'] ?>">
+<button class="demote-btn manage-btn" name="demote_admin">Demote</button>
+</form>
 <?php endif; ?>
 
-<?php if ($adm['approved'] && !$adm['is_super']): ?>
-    <a href="promote_admin.php?id=<?= $adm['id'] ?>"><button class="promote-btn manage-btn">Promote</button></a>
+
+<!-- Disable / Enable -->
+<?php if (($adm['status'] ?? 'active') === 'active'): ?>
+<form method="post" style="display:inline;">
+<input type="hidden" name="id" value="<?= $adm['id'] ?>">
+<button class="delete-btn manage-btn" name="disable_admin">Disable</button>
+</form>
+<?php else: ?>
+<form method="post" style="display:inline;">
+<input type="hidden" name="id" value="<?= $adm['id'] ?>">
+<button class="approve-btn manage-btn" name="enable_admin">Enable</button>
+</form>
 <?php endif; ?>
 
-<?php if ($adm['approved'] && $adm['is_super'] && $adm['email'] !== $_SESSION['admin']): ?>
-    <a href="demote_admin.php?id=<?= $adm['id'] ?>"><button class="demote-btn manage-btn">Demote</button></a>
-<?php endif; ?>
 
-<?php if ($adm['approved'] && !$adm['is_super'] && $adm['email'] !== $_SESSION['admin']): ?>
-    <form action="delete_admin.php" method="POST" style="display:inline;" onsubmit="return confirm('Delete this admin?');">
-        <input type="hidden" name="id" value="<?= $adm['id'] ?>">
-        <button type="submit" class="delete-btn manage-btn">Delete</button>
-    </form>
+<?php else: ?>
+<em>Current User</em>
 <?php endif; ?>
 </td>
 </tr>
 <?php endforeach; ?>
 </table>
-<hr>
-<?php endif; ?>
 
-<h2>Create a New Job Posting</h2>
-<form method="POST">
-<input type="text" name="title" placeholder="Job Title" required>
-<input type="text" name="faculty" placeholder="Faculty" required>
-<input type="text" name="department" placeholder="Department" required>
-<input type="text" name="position" placeholder="Position" required>
-<input type="text" name="qualification" placeholder="Minimum Qualification" required>
-<textarea name="description" rows="4" placeholder="Job Description" required></textarea>
-
-<h3>Admin-only Requirements</h3>
-<input type="text" name="requirement_qualification" placeholder="Academic Requirement" required>
-<input type="number" name="requirement_experience" placeholder="Years of Experience" required>
-<input type="number" name="requirement_publications" placeholder="Publications Required" required>
-<input type="text" name="requirement_body" placeholder="Professional Body" required>
-
-<button type="submit">Add Job</button>
+<h3>Create New Admin</h3>
+<form method="post">
+<input type="email" name="email" placeholder="Admin Email" required>
+<input type="password" name="password" placeholder="Temporary Password" required>
+<button class="approve-btn" name="create_admin">Create Admin</button>
 </form>
-
+<?php endif; ?>
 <hr>
+
+
 <h2>Existing Job Listings</h2>
-<?php if(count($jobs)>0): ?>
+
+<?php if (count($jobs) > 0): ?>
 <table>
 <tr>
-<th>Title</th>
-<th>Faculty</th>
-<th>Department</th>
-<th>Position</th>
-<th>Qualification</th>
-<th>Actions</th>
+    <th>Job Category</th>
+    <th>Faculty</th>
+    <th>Department</th>
+    <th>Position</th>
+    <th>Qualification</th>
+    <th>Job Status</th>
+    <th>Action</th> 
 </tr>
-<?php foreach($jobs as $index=>$job): ?>
+
+<?php foreach ($jobs as $index => $job): ?>
+<?php
+    $isExpired = !empty($job['deadline']) && strtotime($job['deadline']) < time();
+    $isActive  = $job['is_active'] ?? true;
+?>
 <tr>
-<td><?= htmlspecialchars($job['title']) ?></td>
-<td><?= htmlspecialchars($job['faculty']) ?></td>
-<td><?= htmlspecialchars($job['department']) ?></td>
-<td><?= htmlspecialchars($job['position']) ?></td>
-<td><?= htmlspecialchars($job['qualification']) ?></td>
+    <td><?= htmlspecialchars($job['category']) ?></td>
+    <td><?= htmlspecialchars($job['faculty']) ?></td>
+    <td><?= htmlspecialchars($job['department']) ?></td>
+    <td><?= htmlspecialchars($job['position']) ?></td>
+   <td><?= htmlspecialchars($job['qualification_display'] ?? $job['qualification'] ?? 'N/A') ?></td>
 <td>
-  <a href="edit_job.php?index=<?= $index ?>" class="manage-btn" style="background:#0066cc;">Edit</a>
-  <form action="delete_job.php" method="POST" style="display:inline;" onsubmit="return confirm('Delete this job?');">
-    <input type="hidden" name="id" value="<?= $index ?>">
-    <button type="submit" class="delete-btn">Delete</button>
-  </form>
+    <?php if (!empty($job['is_active'])): ?>
+        <span style="color:green;font-weight:bold;">Active</span>
+    <?php else: ?>
+        <span style="color:red;font-weight:bold;">Inactive</span>
+    <?php endif; ?>
 </td>
+
+    <td>
+        <!-- STATUS BADGE -->
+        <?php if ($isExpired): ?>
+            <span class="badge pending">Closed</span>
+        <?php elseif ($isActive): ?>
+            <span class="badge approved">Active</span>
+        <?php else: ?>
+            <span class="badge pending">Disabled</span>
+        <?php endif; ?>
+
+        <br><br>
+
+        <!-- ACTION BUTTONS -->
+        <a href="edit_job.php?index=<?= $index ?>"
+           class="manage-btn"
+           style="background:#0066cc;">Edit</a>
+
+        <a href="toggle_job.php?id=<?= $index ?>"
+           class="manage-btn"
+           style="background:#008000;"
+           onclick="return confirm('Change job visibility?')">
+           <?= $isActive ? 'Disable' : 'Enable' ?>
+        </a>
+
+        <form action="delete_job.php"
+              method="POST"
+              style="display:inline;"
+              onsubmit="return confirm('Delete this job?');">
+            <input type="hidden" name="id" value="<?= $index ?>">
+            <button type="submit" class="delete-btn manage-btn">Delete</button>
+        </form>
+    </td>
 </tr>
 <?php endforeach; ?>
+
 </table>
 <?php else: ?>
 <p>No jobs found.</p>

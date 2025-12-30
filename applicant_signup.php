@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($error)) {
         $users[] = ['name' => $name, 'email' => $email, 'password' => $password];
         file_put_contents($file, json_encode($users, JSON_PRETTY_PRINT));
-        header("Location: login.php?success=1");
+        header("Location: applicant_login.php?success=1");
         exit();
     }
 }
@@ -74,6 +74,9 @@ nav {
         <h5>Job Recruitment Portal</h5>
       </div>
     </div>
+      <div>
+         <a href="index.php" style="background:white; color:#004080; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">Home</a>
+      </div>
     </nav>
 <div class="container">
   <h2>Create Account</h2>

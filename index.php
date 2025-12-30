@@ -7,18 +7,72 @@ $jobs = file_exists($jobs_file) ? json_decode(file_get_contents($jobs_file), tru
 
 // Check if applicant is logged in
 $isApplicant = isset($_SESSION['applicant_email']);
+function load_jobs_json($file) {
+    if (!file_exists($file)) {
+        file_put_contents($file, "[]"); // Create empty array
+    }
+
+    $raw = file_get_contents($file);
+    $data = json_decode($raw, true);
+
+    // If invalid JSON, repair it
+    if (!is_array($data)) {
+        $data = [$data]; // turn single job into array
+    }
+
+    // If it's empty or null, fix it
+    if ($data === null || $data === "" || $data === false) {
+        $data = [];
+    }
+
+    // Enforce array type
+    if (!is_array($data)) {
+        $data = [$data];
+    }
+
+    // Rewrite clean, safe JSON
+    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+
+    return $data;
+}
 
 // Handle search query
 $search = isset($_GET['search']) ? strtolower(trim($_GET['search'])) : '';
 if (!empty($search)) {
     $jobs = array_filter($jobs, function ($job) use ($search) {
-        return str_contains(strtolower($job['title']), $search)
-            || str_contains(strtolower($job['faculty']), $search)
-            || str_contains(strtolower($job['department']), $search)
-            || str_contains(strtolower($job['position']), $search)
-            || str_contains(strtolower($job['qualification']), $search);
-    });
+    return str_contains(strtolower($job['category'] ?? ''), $search)
+        || str_contains(strtolower($job['title'] ?? ''), $search)
+        || str_contains(strtolower($job['faculty'] ?? ''), $search)
+        || str_contains(strtolower($job['department'] ?? ''), $search)
+        || str_contains(strtolower($job['position'] ?? ''), $search)
+        || str_contains(strtolower($job['qualification'] ?? ''), $search);
+});
+
+    $now = time();
+
+$visible_jobs = array_filter($jobs, function ($job) use ($now) {
+    if (isset($job['is_active']) && $job['is_active'] === false) return false;
+   $now = time();
+
+$visible_jobs = array_filter($job, function ($job) use ($now) {
+
+    // Hide ONLY if explicitly inactive
+    if (isset($job['is_active']) && $job['is_active'] === false) {
+        return false;
+    }
+
+    // Hide ONLY if deadline exists and is passed
+    if (!empty($job['deadline']) && strtotime($job['deadline']) < $now) {
+        return false;
+    }
+
+    return true;
+});
+
+});
+
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -27,7 +81,7 @@ if (!empty($search)) {
 <title>EKSU Recruitment Portal</title>
 <style>
 body {
-    font-family: Arial, sans-serif;
+   font-family: 'Times New Roman', Times, serif;
     background: #f0f4f8;
     margin: 0;
 }
@@ -125,12 +179,12 @@ nav h1 {
 /* === HERO SECTION === */
 .hero {
     position: relative;
-    background: url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f') no-repeat center center/cover;
-    height: 200px;
+    background: url('https://eksu.edu.ng/wp-content/uploads/2020/09/EKSU-Acad-Buiding-2048x1536.jpg') no-repeat center center/cover;
+    height: 300px;
     display: flex;
     justify-content: center;
     align-items: center;
-    color: White;
+    color: black;
     text-align: center;
 }
 .hero::before {
@@ -148,6 +202,7 @@ nav h1 {
     font-size: 30px;
     margin-bottom: 10px;
     font-weight: bold;
+    color: black;
 }
 .hero-content p {
     font-size: 16px;
@@ -189,7 +244,7 @@ nav h1 {
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 h2 {
-    color: #f9f8f8ff;
+    color: #800000;
     text-align: center;
 }
 table {
@@ -222,6 +277,61 @@ th {
     text-align: center;
     margin-top: 15px;
 }
+.deadline {
+    font-size:13px;
+    margin-bottom:4px;
+}
+
+.countdown {
+    font-weight:bold;
+    color:#004080;
+    margin-bottom:8px;
+}
+
+.badge {
+    padding:5px 8px;
+    border-radius:5px;
+    font-size:12px;
+    color:white;
+}
+
+.badge.closed {
+    background:#b00000;
+}
+td {
+    vertical-align: top;
+}
+
+.action-cell {
+    max-width: 220px;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.closed-message {
+    display: block;
+    background: #b00000;
+    color: #fff;
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.apply-btn {
+    display:inline-block;
+    padding:6px 10px;
+    background:#008000;
+    color:white;
+    border-radius:5px;
+    text-decoration:none;
+}
+.apply-btn:hover {
+    background:#006600;
+}
+
 footer {
     background: #800000;
     color: white;
@@ -247,17 +357,19 @@ footer {
             <div></div>
             <div></div>
             <div></div>
+            <div></div>
         </div>
 
         <div id="dropdownMenu" class="dropdown-menu">
             <?php if ($isApplicant): ?>
                <span>Welcome, <?= htmlspecialchars($_SESSION['applicant_email']); ?></span>
                 <a href="applicant_dashboard.php">Applicant Dashboard</a>
-                <a href="logout.php">Logout</a>
+                <a href="applicant_logout.php">Logout</a>
             <?php else: ?>
                 <a href="applicant_login.php">Applicant Login</a>
                 <a href="applicant_signup.php">Applicant Signup</a>
                 <a href="admin_login.php">Admin Login</a>
+                <a href="https://eksu.edu.ng/about-eksu/">About Us</a>
             <?php endif; ?>
         </div>
     </div>
@@ -276,39 +388,80 @@ footer {
 </section>
 
 <!-- JOB LISTINGS -->
-<div class="container">
-  <h2>Available Job Listings</h2>
-  <?php if (count($jobs) > 0): ?>
-    <table>
-      <tr>
-        <th>Title</th>
+<?php if (count($jobs) > 0): ?>
+<table>
+    <h2>Available Job Listing</h2>
+    <tr>
+        <th>Job Category</th>
         <th>Faculty</th>
         <th>Department</th>
         <th>Position</th>
         <th>Qualification</th>
+        <th>Status</th>
         <th>Action</th>
-      </tr>
-      <?php foreach ($jobs as $index => $job): ?>
-        <tr>
-          <td><?= htmlspecialchars($job['title'] ?? 'N/A'); ?></td>
-          <td><?= htmlspecialchars($job['faculty'] ?? 'N/A'); ?></td>
-          <td><?= htmlspecialchars($job['department'] ?? 'N/A'); ?></td>
-          <td><?= htmlspecialchars($job['position'] ?? 'N/A'); ?></td>
-          <td><?= htmlspecialchars($job['qualification'] ?? 'N/A'); ?></td>
-          <td>
-            <?php if ($isApplicant): ?>
-              <a href="apply.php?job_id=<?= urlencode($index); ?>" class="apply-btn">Apply Now</a>
-            <?php else: ?>
-              <a href="applicant_login.php" class="apply-btn" style="background:#ff6600;">Login to Apply</a>
-            <?php endif; ?>
-          </td>
-        </tr>
-      <?php endforeach; ?>
-    </table>
-  <?php else: ?>
-    <p class="notice">No job postings found for your search. Please try again.</p>
-  <?php endif; ?>
-</div>
+    </tr>
+
+    <?php foreach ($jobs as $index => $job): ?>
+    <tr>
+       <td><?= htmlspecialchars($job['category'] ?? 'N/A'); ?></td>
+        <td><?= htmlspecialchars($job['faculty'] ?? 'N/A'); ?></td>
+        <td><?= htmlspecialchars($job['department'] ?? 'N/A'); ?></td>
+        <td><?= htmlspecialchars($job['position'] ?? 'N/A'); ?></td>
+        <td><?= htmlspecialchars($job['qualification_display'] ?? $job['qualification'] ?? 'N/A'); ?></td>
+  <td>
+    <?php if (!empty($job['is_active'])): ?>
+        <span style="color:green;font-weight:bold;">Active</span>
+    <?php else: ?>
+        <span style="color:red;font-weight:bold;">Inactive</span>
+    <?php endif; ?>
+</td>
+        <td class="action-cell">
+    <?php
+        $isExpired = !empty($job['deadline']) && strtotime($job['deadline']) < time();
+        $deadline  = $job['deadline'] ?? null;
+    ?>
+
+    <?php if ($isExpired): ?>
+        <span class="closed-message">
+            You cannot apply for this job.<br>
+            It is closed.
+        </span>
+    <?php else: ?>
+
+        <?php if ($isApplicant): ?>
+            <a href="apply.php?job_id=<?= urlencode($index); ?>" class="apply-btn">
+                Apply Now
+            </a>
+        <?php else: ?>
+            <a href="applicant_login.php" class="apply-btn" style="background:#ff6600;">
+                Login to Apply
+            </a>
+        <?php endif; ?>
+
+        <?php if ($deadline): ?>
+            <div class="deadline">
+                Deadline:<br>
+                <strong><?= date('d M Y, H:i', strtotime($deadline)) ?></strong>
+            </div>
+
+            <div class="countdown" data-deadline="<?= htmlspecialchars($deadline) ?>">
+                Loading countdown...
+            </div>
+        <?php endif; ?>
+
+    <?php endif; ?>
+</td>
+
+
+    </tr>
+    <?php endforeach; ?>
+</table>
+
+<?php else: ?>
+    <p class="notice">No job postings found.</p>
+<?php endif; ?>
+
+
 <script>
 function toggleMenu() {
     const menu = document.getElementById("dropdownMenu");
@@ -322,6 +475,28 @@ document.addEventListener("click", function(event) {
     if (!hamburger.contains(event.target) && !menu.contains(event.target)) {
         menu.style.display = "none";
     }
+});
+document.querySelectorAll('.countdown').forEach(timer => {
+    const deadline = new Date(timer.dataset.deadline).getTime();
+
+    function update() {
+        const now = Date.now();
+        const diff = deadline - now;
+
+        if (diff <= 0) {
+            timer.innerHTML = "<span class='badge closed'>Closed</span>";
+            return;
+        }
+
+        const days  = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const mins  = Math.floor((diff / (1000 * 60)) % 60);
+
+        timer.textContent = `Closes in ${days}d ${hours}h ${mins}m`;
+        setTimeout(update, 60000);
+    }
+
+    update();
 });
 </script>
 

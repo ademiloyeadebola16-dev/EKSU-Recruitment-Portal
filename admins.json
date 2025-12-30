@@ -1,29 +1,17 @@
 [
     {
         "id": 1,
-        "email": "firstadmin@example.com",
-        "name": "Primary Admin",
-        "password_hash": "$2y$10$REPLACE_WITH_HASHED_PASSWORD",
-        "approved": true,
-        "is_super": true,
-        "date": "2025-11-20 00:00:00"
+        "email": "superadmin@eksu.edu.ng",
+        "password": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC\/.og\/at2.uheWG\/igi",
+        "role": "super",
+        "created_at": "2025-01-01 10:00:00"
     },
     {
-        "id": 3,
-        "email": "princessadebola4mat@gmail.com",
-        "name": "Primary Admin",
-        "password_hash": "$2y$10$FBkYfqjLHwv\/0jsQktTc3e1Z1tZVitNAVVllHHndPwC7v1Up1cD0C",
-        "approved": true,
-        "is_super": true,
-        "date": "2025-11-20 19:02:20"
-    },
-    {
-        "id": 4,
-        "name": "Ademiluyi Busayo",
+        "id": 1765971546,
         "email": "ademiluyibusayo24@gmail.com",
-        "password_hash": "$2y$10$lAEesVL02GQ9GyIr0i7q9u2wFjc7xk35C9ncCwCkqEdaIAZckAArO",
-        "approved": true,
-        "is_super": false,
-        "date": "2025-11-23 20:35:58"
+        "password": "$2y$10$VekSADTPExvnN7m.hCkp9uNmKccnsM9Cz0RPPewf18u9kAw6LBfNW",
+        "role": "admin",
+        "created_at": "2025-12-17 12:39:07",
+        "status": "active"
     }
 ]

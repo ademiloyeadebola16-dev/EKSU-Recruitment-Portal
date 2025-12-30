@@ -53,13 +53,12 @@ footer { background: #800000; color: white; text-align: center; padding: 16px; m
       <div class="nav-text">
         <h1>Ekiti State University, Ado-Ekiti</h1>
         <h5>Job Recruitment Portal</h5>
-        <div style="font-size:13px;color:#ffd4d4;margin-top:6px">Welcome, <?= htmlspecialchars($_SESSION['admin']) ?> 👋</div>
       </div>
    </div>
 
    <div>
-    <a href="admin.php" class="btn" style="background:#008000;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;margin-right:6px;">🏠 Home</a>
-    <a href="update_application_status.php" class="btn" style="background:#800000;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;margin-right:6px;">⚙️ Run Qualification Check</a>
+    <a href="admin.php" class="btn" style="background:#008000;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;margin-right:6px;">Home</a>
+    <a href="update_application_status.php" class="btn" style="background:#800000;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;margin-right:6px;">Run Qualification Check</a>
     <a href="admin_logout.php" class="btn" style="background:#cc0000;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;">Logout</a>
    </div>
 </nav>
@@ -97,16 +96,10 @@ footer { background: #800000; color: white; text-align: center; padding: 16px; m
             ?>
         </select>
 
-        <select id="printJobSelect">
-            <option value="">Print by Job (optional)</option>
-            <?php foreach ($jobsList as $jt) echo '<option value="'.htmlspecialchars($jt).'">'.htmlspecialchars($jt).'</option>'; ?>
-        </select>
-        <button class="btn btn-primary" onclick="printByJob()">Print Selected Job</button>
     </div>
 
     <!-- Toolbar with exports -->
     <div class="toolbar">
-        <button class="btn btn-primary" onclick="printFiltered()">🖨️ Print Filtered</button>
         <button class="btn btn-success" onclick="exportFilteredRows()">⬇️ Export Filtered to PDF</button>
         <button class="btn btn-success" onclick="window.open('export_pdf_all.php','_blank')">⬇️ Export All to PDF</button>
         <button class="btn btn-ghost" onclick="exportCSV('filtered')">⬇️ Export Filtered to CSV</button>

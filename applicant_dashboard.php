@@ -1,5 +1,7 @@
 <?php
 session_start();
+
+// Redirect if not logged in
 if (!isset($_SESSION['applicant_email'])) {
     header("Location: applicant_login.php");
     exit();
@@ -7,12 +9,35 @@ if (!isset($_SESSION['applicant_email'])) {
 
 $email = $_SESSION['applicant_email'];
 $applications_file = 'applications.json';
-$applications = file_exists($applications_file) ? json_decode(file_get_contents($applications_file), true) : [];
 
-// Find all applications by this applicant
+// Load applications
+$applications = file_exists($applications_file) 
+    ? json_decode(file_get_contents($applications_file), true) 
+    : [];
+
+// Filter applications belonging to this applicant
 $userApplications = array_filter($applications, function($app) use ($email) {
     return isset($app['email']) && $app['email'] === $email;
 });
+
+// Get the most recent application as profile info
+$profile = !empty($userApplications) ? end($userApplications) : null;
+
+// Extract profile info
+$fullName = trim(
+    ($profile['first_name'] ?? '') . ' ' .
+    ($profile['middle_name'] ?? '') . ' ' .
+    ($profile['last_name'] ?? '')
+);
+
+$applicantNumber = $profile['applicant_number'] ?? 'Not Assigned';
+$passport = $profile['passport'] ?? '';
+$defaultPassport = 'default_passport.png';
+
+$passportPath = (!empty($passport) && file_exists($passport))
+    ? $passport
+    : $defaultPassport;
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -39,6 +64,26 @@ th { background:#800000; color:white; }
 .status.NotQualified { color:red; }
 .apply-btn { display:inline-block; background:#800000; color:white; padding:10px 20px; border:none; border-radius:5px; text-decoration:none; font-weight:bold; margin-top:15px; }
 .apply-btn:hover { background:#660000; }
+
+.profile-card {
+    background:#fff;
+    border:1px solid #ddd;
+    padding:20px;
+    border-radius:10px;
+    display:flex;
+    align-items:center;
+    gap:20px;
+    margin-top:20px;
+}
+.profile-card img {
+    width:120px;
+    height:120px;
+    object-fit:cover;
+    border-radius:10px;
+    border:2px solid #800000;
+}
+.profile-info { font-size:16px; }
+.profile-info b { color:#800000; }
 </style>
 </head>
 <body>
@@ -50,20 +95,33 @@ th { background:#800000; color:white; }
       <div class="nav-text">
         <h1>Ekiti State University, Ado-Ekiti</h1>
         <h5>Job Recruitment Portal</h5>
+        <span>Welcome, <?= htmlspecialchars($email) ?> 👋</span>
       </div>
    </div>
-</nav>
 
-<nav>
-  <span>Welcome, <?= htmlspecialchars($email) ?> 👋</span>
-  <a href="index.php" style="background:white; color:#800000; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold; margin-left:10px;">🏠 Home</a>
-  <a href="logout.php">Logout</a>
+   <div>
+      <a href="index.php" style="background:white; color:#800000; padding:8px 15px; border-radius:5px;">Home</a>
+      <a href="applicant_logout.php">Logout</a>
+   </div>
 </nav>
 
 <div class="container">
   <h2>My Applications</h2>
 
-  <?php if (count($userApplications) > 0): ?>
+  <!-- Profile Display Box -->
+  <?php if ($profile): ?>
+  <div class="profile-card">
+      <img src="<?= htmlspecialchars($passportPath) ?>" alt="Passport">
+      <div class="profile-info">
+          <p><b>Name:</b> <?= htmlspecialchars($fullName) ?></p>
+          <p><b>Applicant Number:</b> <?= htmlspecialchars($applicantNumber) ?></p>
+          <p><b>Email:</b> <?= htmlspecialchars($email) ?></p>
+      </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- Applications Table -->
+  <?php if (!empty($userApplications)): ?>
     <table>
       <tr>
         <th>Job Title</th>
@@ -72,15 +130,16 @@ th { background:#800000; color:white; }
         <th>Remarks</th>
         <th>Description</th>
       </tr>
+
       <?php foreach ($userApplications as $app): ?>
-        <?php 
-            $fullName = trim(($app['first_name'] ?? '') . ' ' . ($app['middle_name'] ?? '') . ' ' . ($app['last_name'] ?? ''));
+        <?php
             $status_visible = isset($app['status_visible']) && $app['status_visible'] === true;
 
-            // Default to Under Review if not visible yet
-            $status = $status_visible ? ($app['status'] ?? 'Pending') : 'Under Review';
+            // Default: Under Review until admin publishes the result
+            $status = $status_visible ? ($app['status'] ?? 'Pending') : 'UnderReview';
             $reason = $status_visible ? ($app['reason'] ?? 'No remarks available.') : 'Under Review';
         ?>
+
         <tr>
           <td><?= htmlspecialchars($app['job_title'] ?? 'N/A') ?></td>
           <td><?= htmlspecialchars($app['department'] ?? 'N/A') ?></td>
@@ -91,7 +150,9 @@ th { background:#800000; color:white; }
           <td><?= htmlspecialchars($app['description'] ?? 'No description provided') ?></td>
         </tr>
       <?php endforeach; ?>
+
     </table>
+
     <a href="index.php" class="apply-btn">Apply for Another Job</a>
 
   <?php else: ?>

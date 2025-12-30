@@ -1,50 +1,5 @@
 [
     {
-        "email": "tolulope23@gmail.com",
-        "job_id": "0",
-        "job_title": "Lecturer I",
-        "department": "Data Science",
-        "qualification_required": "M.sc",
-        "academic_qualification": "M.Sc",
-        "professional_body": "Teacher Registration Council of Nigeria (TRCN)",
-        "cover_letter": "ghjglhl;obhhvvvhhjv nmhbhbn",
-        "first_name": "Tolulope",
-        "middle_name": "Titi",
-        "last_name": "Ajayi",
-        "phone": "76090088766",
-        "dob": "1992-12-06",
-        "pob": "sarki",
-        "gender": "Female",
-        "nationality": "Nigerian",
-        "state": "Ekiti",
-        "lga": "Oye",
-        "publications": "6",
-        "experience_years": "7",
-        "cv": "uploads\/CV_1762847392_6912eaa021baf.pdf",
-        "referees": [
-            {
-                "name": "gfdfhdhdd",
-                "phone": "ggggggg",
-                "email": "dasnkdd@gmail.com",
-                "occupation": "Lecturer"
-            },
-            {
-                "name": "fgdmjfkfkkkklkcn",
-                "phone": "78930-23333",
-                "email": "jsfbghg@gmail.com",
-                "occupation": "hhfhdjukjhijhde"
-            }
-        ],
-        "status": "Disqualified",
-        "date": "2025-11-11 08:49:52",
-        "remarks": "Applicant does not meet one or more job requirements:\n- Academic qualification does not meet minimum requirement (m.sc).\n- Teaching experience meets or exceeds requirement.\n- Publication count meets or exceeds requirement.\n- Applicant is not registered with the required professional body (teacher's registration council of nigeria (trcn)).",
-        "reason": "Disqualified: You applied for more than 2 job positions.",
-        "status_visible": false,
-        "evaluation_score": "<br \/><b>Warning<\/b>:  Undefined array key ",
-        "evaluation_remark": "<br \/>\r\n<b>Warning<\/b>:  Undefined array key \"evaluation_remark\" in <b>C:\\Users\\HP\\Desktop\\XAMPP\\htdocs\\My code\\My PHP codes\\view_applicant_detail.php<\/b> on line <b>168<\/b><br \/>\r\n",
-        "application_status": "Under Review"
-    },
-    {
         "email": "ademiloyeadebola16@gmail.com",
         "job_id": "0",
         "job_title": "Lecturer I",
@@ -83,7 +38,7 @@
         "status": "Qualified",
         "date": "2025-11-11 09:33:17",
         "reason": "All job requirements were successfully met.",
-        "status_visible": false
+        "status_visible": true
     },
     {
         "email": "tolulope23@gmail.com",
@@ -128,7 +83,7 @@
         "qualification_similarity": 100,
         "body_similarity": 100,
         "custom_requirements": [],
-        "status_visible": false,
+        "status_visible": true,
         "date": "2025-11-19 09:14:08"
     },
     {
@@ -176,5 +131,319 @@
         "custom_requirements": [],
         "status_visible": false,
         "date": "2025-11-19 09:22:05"
+    },
+    {
+        "email": "ademiloyeadebola16@gmail.com",
+        "job_id": "5",
+        "job_title": "Academic",
+        "department": "Computer Science",
+        "qualification": "Ph.D",
+        "requirement_qualification": "Ph.D",
+        "academic_qualification": "Ph.D",
+        "professional_body": "CPN",
+        "cover_letter": "i can teach, carry out reseach and read",
+        "first_name": "Ademiloye",
+        "middle_name": "Iyabo",
+        "last_name": "Adebola",
+        "phone": "78899000066",
+        "dob": "1993-12-22",
+        "pob": "Oke",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "state": "Ekiti",
+        "lga": "Oye",
+        "publications": 25,
+        "experience_years": 25,
+        "cv": "uploads\/CV_1764236538_69281cfaeacae.pdf",
+        "referees": [
+            {
+                "name": "hvvhkvjs",
+                "phone": "3979877232",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "Lecturer"
+            },
+            {
+                "name": "jsdifjisifsf",
+                "phone": "78930-23333",
+                "email": "hhfhifihsf",
+                "occupation": "djffsfisishskj"
+            },
+            {
+                "name": "hhhhsihiskkkf",
+                "phone": "3333647",
+                "email": "ghhjwhjjh@gmail.com",
+                "occupation": "jsjkjfsfo[fif"
+            }
+        ],
+        "internal_status": "Qualified",
+        "status": "Qualified",
+        "reason": "All job requirements were successfully met.",
+        "qualification_similarity": 100,
+        "body_similarity": 100,
+        "custom_requirements": [
+            {
+                "label": "Number of Citation",
+                "response_text": "20",
+                "response_file": ""
+            },
+            {
+                "label": "Recognition in Google Scholar and Research",
+                "response_text": "Yes",
+                "response_file": ""
+            }
+        ],
+        "status_visible": false,
+        "date": "2025-11-27 10:42:19"
+    },
+    {
+        "email": "tolulope23@gmail.com",
+        "job_id": "3",
+        "job_title": "Academic",
+        "department": "Agricultural Business Management",
+        "qualification": "M.sc",
+        "requirement_qualification": "Ph.D",
+        "academic_qualification": "M.sc",
+        "professional_body": "Teacher Registration Council of Nigeria (TRCN)",
+        "cover_letter": "hdkjlhcewh",
+        "first_name": "Tolulope",
+        "middle_name": "Titi",
+        "last_name": "Ajayi",
+        "phone": "76090088766",
+        "dob": "1993-12-13",
+        "pob": "ghjs",
+        "gender": "Male",
+        "nationality": "Nigerian",
+        "state": "Ekiti",
+        "lga": "oyo",
+        "publications": 3,
+        "experience_years": 3,
+        "cv": "uploads\/CV_1764237238_69281fb6a5b4c.pdf",
+        "referees": [
+            {
+                "name": "Ademiloye Adebola",
+                "phone": "344343",
+                "email": "gjwkhlkl@gmail.com",
+                "occupation": "Lecturer"
+            },
+            {
+                "name": "hhjhjwi",
+                "phone": "45656767345",
+                "email": "jsfbghg@gmail.com",
+                "occupation": "hhfhdjukjhijhde"
+            },
+            {
+                "name": "hjkffhs;f",
+                "phone": "38788366692",
+                "email": "ghhjwhjjh@gmail.com",
+                "occupation": "hjfwlhfw;hfwj"
+            }
+        ],
+        "internal_status": "Not Qualified",
+        "status": "Disqualified",
+        "reason": "Disqualified: You applied for more than 2 job positions.",
+        "qualification_similarity": 25,
+        "body_similarity": 23.33,
+        "custom_requirements": [
+            {
+                "label": "Number of Citation",
+                "response_text": "12",
+                "response_file": ""
+            },
+            {
+                "label": "Job Appraisal Point",
+                "response_text": "12",
+                "response_file": ""
+            },
+            {
+                "label": "Community Service Point",
+                "response_text": "12",
+                "response_file": ""
+            },
+            {
+                "label": "Leadership and Administrative Responsibility Point",
+                "response_text": "12",
+                "response_file": ""
+            }
+        ],
+        "status_visible": false,
+        "date": "2025-11-27 10:53:58"
+    },
+    {
+        "email": "amoyinoluwa59@gmail.com",
+        "job_id": "0",
+        "job_title": "Lecturer I",
+        "department": "Data Science",
+        "qualification": "M.Sc",
+        "requirement_qualification": "M.sc",
+        "academic_qualification": "M.Sc",
+        "professional_body": "Teacher's Registration Council of Nigeria (TRCN)",
+        "cover_letter": "computer science",
+        "first_name": "Moyinoluwa",
+        "middle_name": "Olamide",
+        "last_name": "Afolayan",
+        "phone": "76090088766",
+        "dob": "1993-04-05",
+        "pob": "sarki",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "state": "Oyo",
+        "lga": "Erelu",
+        "publications": 3,
+        "experience_years": 4,
+        "cv": "uploads\/CV_1764237646_6928214e4debd.pdf",
+        "referees": [
+            {
+                "name": "Ademiloye Adebola",
+                "phone": "3443367",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "mfkf'kjskkdfs"
+            },
+            {
+                "name": "Ademiloye Adebola",
+                "phone": "78930-23333",
+                "email": "jhjkkbkbvbh@ghjnb.com",
+                "occupation": "hvhdfhf"
+            },
+            {
+                "name": "nvskkkksdl",
+                "phone": "2344758032",
+                "email": "ghhjwhjjh@gmail.com",
+                "occupation": "jjjsfdfjkklfjkow"
+            }
+        ],
+        "internal_status": "Qualified",
+        "status": "Not Qualified",
+        "reason": "Required experience: 5 years | Applicant has: 4 years.",
+        "qualification_similarity": 100,
+        "body_similarity": 100,
+        "custom_requirements": [],
+        "status_visible": true,
+        "date": "2025-11-27 11:00:46"
+    },
+    {
+        "email": "salvationoluleke25@gmail.com",
+        "job_id": "6",
+        "job_title": "Non-Academic",
+        "department": "Registry",
+        "qualification": "Bachelor's Degree (Second Class Lower Division 2.2)",
+        "requirement_qualification": "Bachelor Degree (Second Class Lower Division) 2.2",
+        "academic_qualification": "Bachelor's Degree (Second Class Lower Division 2.2)",
+        "professional_body": "NIM, CIPM, ANUPA",
+        "cover_letter": "jhkhkhbljbs",
+        "first_name": "Salvation",
+        "middle_name": "Modupe",
+        "last_name": "Oluleke",
+        "phone": "76090088766",
+        "dob": "1994-12-24",
+        "pob": "Oke",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "state": "Ekiti",
+        "lga": "Oye",
+        "publications": 0,
+        "experience_years": 20,
+        "cv": "uploads\/CV_1764680686_692ee3eea7803.pdf",
+        "referees": [
+            {
+                "name": "hkndkogkd",
+                "phone": "3979877232",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "Lecturer"
+            },
+            {
+                "name": "jjjkkjkmsofsm jjk",
+                "phone": "45656767345",
+                "email": "jhjkkbkbvbh@ghjnb.com",
+                "occupation": "huoh9ou"
+            },
+            {
+                "name": "dduhmmh etyk",
+                "phone": "38788366692",
+                "email": "ghhjwhjjh@gmail.com",
+                "occupation": "jjjsfdfjkklfjkow"
+            }
+        ],
+        "internal_status": "Qualified",
+        "status": "Qualified",
+        "reason": "All job requirements were successfully met.",
+        "qualification_similarity": 96,
+        "body_similarity": 100,
+        "custom_requirements": [
+            {
+                "label": "Bachelor's Degree Certificate Upload",
+                "response_text": "",
+                "response_file": "uploads\/custom_requirements\/custom_6_1764680690_692ee3f27208a_0.pdf"
+            }
+        ],
+        "status_visible": true,
+        "date": "2025-12-02 14:04:50"
+    },
+    {
+        "email": "salvationoluleke25@gmail.com",
+        "job_id": "7",
+        "job_title": "Assistant Lecturer",
+        "department": "Computer Science",
+        "qualification": "B.Sc",
+        "requirement_qualification": "M.Sc",
+        "academic_qualification": "B.Sc",
+        "academic_qualification_other": "",
+        "professional_body": "TRCN",
+        "cover_letter": "mfmkfdkd s fsdff",
+        "first_name": "Salvation",
+        "middle_name": "Modupe",
+        "last_name": "Oluleke",
+        "phone": "78899000066",
+        "dob": "1992-12-12",
+        "pob": "oke",
+        "gender": "Female",
+        "nationality": "Nigerian",
+        "marital_status": "Single",
+        "children": 0,
+        "permanent_address": "sdmd,fkfkdf,dsf fk dkdk d",
+        "state": "Ekiti",
+        "home_town": "Ado",
+        "lga": "Ado",
+        "publications": 15,
+        "experience_years": 20,
+        "cv": "uploads\/CV_1767083290_69538d1a66e3f.pdf",
+        "passport": "uploads\/passports\/passport_1767083290_69538d1a67fba.jpg",
+        "academic_records": [
+            {
+                "institution": "Federal University Oye-Ekiti",
+                "qualification": "B.ED",
+                "from": "",
+                "to": "",
+                "certificate": "uploads\/academic_records\/cert_1767083290_0_507d6889.pdf"
+            }
+        ],
+        "referees": [
+            {
+                "name": "akdklpdamf",
+                "phone": "344343",
+                "email": "dasnkdd@gmail.com",
+                "occupation": "mfkf'kjskkdfs"
+            },
+            {
+                "name": "sklmimfidif icccik",
+                "phone": "45656767345",
+                "email": "jsfbghg@gmail.com",
+                "occupation": "hvhdfhf"
+            },
+            {
+                "name": "kkmkm ckkckdk",
+                "phone": "2344758032",
+                "email": "xsycdrybif@gmaiom.com",
+                "occupation": "huasdnhsdhic"
+            }
+        ],
+        "internal_status": "Not Qualified",
+        "status": "Under Review",
+        "reason": "Awaiting admin review",
+        "qualification_similarity": 75,
+        "body_similarity": 26.67,
+        "custom_requirements": [],
+        "status_visible": false,
+        "date": "2025-12-30 09:28:10",
+        "applicant_number": "EKSU\/APP\/2025\/0001"
     }
 ]

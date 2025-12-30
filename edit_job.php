@@ -15,132 +15,178 @@ if ($index === null || !isset($jobs[$index])) {
 
 $job = $jobs[$index];
 
-// Ensure custom_fields exists
-if (!isset($job['custom_fields']) || !is_array($job['custom_fields'])) {
+/* ---------- DEFAULTS (IMPORTANT) ---------- */
+$defaults = [
+    'job_category' => 'Academic',
+    'faculty' => '',
+    'department' => '',
+    'position' => '',
+    'qualification_display' => '',
+    'description' => '',
+    'requirement_qualification' => '',
+    'required_experience' => 0,
+    'required_publications' => 0,
+    'required_body' => '',
+    'research_expected' => false,
+    'custom_fields' => [],
+    'is_active' => true,
+    'deadline' => ''
+];
+
+
+$job = array_merge($defaults, $job);
+
+if (!is_array($job['custom_fields'])) {
     $job['custom_fields'] = [];
 }
 
-// Save updates
+/* ---------- SAVE UPDATE ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    // Standard fields
-    $jobs[$index]['title'] = trim($_POST['title']);
-    $jobs[$index]['faculty'] = trim($_POST['faculty']);
-    $jobs[$index]['department'] = trim($_POST['department']);
-    $jobs[$index]['position'] = trim($_POST['position']);
-    $jobs[$index]['qualification'] = trim($_POST['qualification']);
-    $jobs[$index]['description'] = trim($_POST['description']);
+    $jobs[$index]['job_category'] = $_POST['job_category'] ?? 'Academic';
+    $jobs[$index]['faculty'] = trim($_POST['faculty'] ?? '');
+    $jobs[$index]['department'] = trim($_POST['department'] ?? '');
+    $jobs[$index]['position'] = trim($_POST['position'] ?? '');
+    $jobs[$index]['qualification_display'] = trim($_POST['qualification_display'] ?? '');
+    $jobs[$index]['description'] = trim($_POST['description'] ?? '');
 
-    // Requirement fields
-    $jobs[$index]['requirement_qualification'] = trim($_POST['requirement_qualification']);
-    $jobs[$index]['required_experience'] = trim($_POST['required_experience']);
-    $jobs[$index]['required_publications'] = trim($_POST['required_publications']);
-    $jobs[$index]['required_body'] = trim($_POST['required_body']);
+    $jobs[$index]['requirement_qualification'] = trim($_POST['requirement_qualification'] ?? '');
+    $jobs[$index]['required_experience'] = (int) ($_POST['required_experience'] ?? 0);
+    $jobs[$index]['required_publications'] = (int) ($_POST['required_publications'] ?? 0);
+    $jobs[$index]['required_body'] = trim($_POST['required_body'] ?? '');
+    $jobs[$index]['research_expected'] = isset($_POST['research_expected']);
 
-    // Custom fields
-    $jobs[$index]['custom_fields'] = array_filter(array_map('trim', $_POST['custom_fields'] ?? []));
+    $jobs[$index]['custom_fields'] = array_values(
+        array_filter(
+            array_map('trim', $_POST['custom_fields'] ?? [])
+        )
+    );
+$jobs[$index]['is_active'] = isset($_POST['is_active']);
+
+$jobs[$index]['deadline'] = !empty($_POST['deadline'])
+    ? $_POST['deadline']
+    : '';
 
     file_put_contents($jobs_file, json_encode($jobs, JSON_PRETTY_PRINT));
 
     $_SESSION['message'] = "Job updated successfully!";
-    header("Location: admin_jobs.php");
+    header("Location: admin.php");
     exit();
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>Edit Job</title>
 <style>
-body { font-family: Arial, sans-serif; background:#f0f2f5; }
-.container { max-width:700px; margin:40px auto; background:white; padding:25px; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
-input, textarea { width:100%; padding:10px; margin:10px 0; border:1px solid #ccc; border-radius:5px; }
-button { padding:10px 20px; margin-top:10px; border:none; border-radius:5px; background:#800000; color:white; cursor:pointer; }
-button:hover { background:#660000; }
-.add-btn { background:#0066cc; }
-.add-btn:hover { background:#004c99; }
-.field-container { margin-bottom:10px; }
-h2, h3 { color:#800000; }
-a { color:white; text-decoration:none; }
-nav { background:#800000; padding:15px 10%; display:flex; justify-content:space-between; }
+body { font-family: Arial; background:#f0f2f5; }
+.container { max-width:750px; margin:40px auto; background:white; padding:25px; border-radius:10px; }
+input, select, textarea { width:100%; padding:10px; margin:10px 0; }
+button { padding:10px 20px; border:none; background:#800000; color:white; cursor:pointer; }
+.add-btn { background:#0066cc; margin-bottom:10px; }
+label input[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+}
+
+h3 {
+    margin-top: 25px;
+    color: #800000;
+}
+
 </style>
 </head>
+
 <body>
 
-<nav>
-    <div style="color:white;font-size:20px;">Edit Job</div>
-    <a href="admin_jobs.php" style="background:#008000;padding:8px 15px;border-radius:5px;">⬅ Back</a>
-</nav>
-
 <div class="container">
-
-<h2>Edit Job: <?= htmlspecialchars($job['title']) ?></h2>
+<h2>Edit Job</h2>
 
 <form method="POST">
 
-    <label>Job Title:</label>
-    <input type="text" name="title" value="<?= htmlspecialchars($job['title']) ?>" required>
+    <label>Job Category</label>
+    <select name="job_category" required>
+        <option value="Academic" <?= $job['job_category']==="Academic"?"selected":"" ?>>Academic</option>
+        <option value="Non-Academic" <?= $job['job_category']==="Non-Academic"?"selected":"" ?>>Non-Academic</option>
+    </select>
 
-    <label>Faculty:</label>
-    <input type="text" name="faculty" value="<?= htmlspecialchars($job['faculty']) ?>" required>
+    <label>Faculty</label>
+    <input type="text" name="faculty" value="<?= htmlspecialchars($job['faculty']) ?>">
 
-    <label>Department:</label>
-    <input type="text" name="department" value="<?= htmlspecialchars($job['department']) ?>" required>
+    <label>Department</label>
+    <input type="text" name="department" value="<?= htmlspecialchars($job['department']) ?>">
 
-    <label>Position:</label>
-    <input type="text" name="position" value="<?= htmlspecialchars($job['position']) ?>" required>
+    <label>Position</label>
+    <input type="text" name="position" value="<?= htmlspecialchars($job['position']) ?>">
 
-    <label>Minimum Qualification:</label>
-    <input type="text" name="qualification" value="<?= htmlspecialchars($job['qualification']) ?>" required>
+    <label>Qualification (Display)</label>
+    <input type="text" name="qualification_display"
+           value="<?= htmlspecialchars($job['qualification_display']) ?>">
 
-    <label>Job Description:</label>
+    <label>Description</label>
     <textarea name="description" rows="4"><?= htmlspecialchars($job['description']) ?></textarea>
+<h3>Job Status</h3>
 
-    <hr>
-    <h3>Admin-Only Requirements</h3>
+<label>
+    <input type="checkbox" name="is_active"
+           <?= $job['is_active'] ? 'checked' : '' ?>>
+    Job is Active
+</label>
 
-    <label>Required Academic Qualification:</label>
-    <input type="text" name="requirement_qualification" value="<?= htmlspecialchars($job['requirement_qualification']) ?>">
+<label>Application Deadline</label>
+<input type="datetime-local" name="deadline"
+       value="<?= htmlspecialchars($job['deadline']) ?>">
 
-    <label>Minimum Years of Experience:</label>
-    <input type="number" name="required_experience" value="<?= htmlspecialchars($job['required_experience']) ?>">
+    <h3>Admin Requirements</h3>
 
-    <label>Required Publications:</label>
-    <input type="number" name="required_publications" value="<?= htmlspecialchars($job['required_publications']) ?>">
+    <label>Required Academic Qualification</label>
+    <input type="text" name="requirement_qualification"
+           value="<?= htmlspecialchars($job['requirement_qualification']) ?>">
 
-    <label>Professional Body Requirement:</label>
-    <input type="text" name="required_body" value="<?= htmlspecialchars($job['required_body']) ?>">
+    <label>Required Experience (Years)</label>
+    <input type="number" name="required_experience"
+           value="<?= (int)$job['required_experience'] ?>">
 
-    <hr>
-    <h3>Custom Requirements</h3>
+    <label>Required Publications</label>
+    <input type="number" name="required_publications"
+           value="<?= (int)$job['required_publications'] ?>">
+
+    <label>Required Professional Body</label>
+    <input type="text" name="required_body"
+           value="<?= htmlspecialchars($job['required_body']) ?>">
+
+    <label>
+        <input type="checkbox" name="research_expected"
+               <?= $job['research_expected'] ? "checked" : "" ?>>
+        Research Expected?
+    </label>
+
+    <h3>Custom Fields</h3>
 
     <div id="fieldsContainer">
         <?php foreach ($job['custom_fields'] as $field): ?>
-            <div class="field-container">
-                <input type="text" name="custom_fields[]" value="<?= htmlspecialchars($field) ?>" placeholder="Custom requirement">
-            </div>
+            <input type="text" name="custom_fields[]" value="<?= htmlspecialchars($field) ?>">
         <?php endforeach; ?>
     </div>
 
-    <button type="button" id="addFieldBtn" class="add-btn">+ Add More</button>
+    <button type="button" class="add-btn" id="addFieldBtn">+ Add More</button>
 
     <br><br>
-
     <button type="submit">Save Changes</button>
 
 </form>
 </div>
 
 <script>
-const container = document.getElementById("fieldsContainer");
-document.getElementById("addFieldBtn").addEventListener("click", () => {
-    const div = document.createElement("div");
-    div.className = "field-container";
-    div.innerHTML = '<input type="text" name="custom_fields[]" placeholder="Custom requirement">';
-    container.appendChild(div);
-});
+document.getElementById("addFieldBtn").onclick = function () {
+    const container = document.getElementById("fieldsContainer");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = "custom_fields[]";
+    input.placeholder = "Custom field";
+    container.appendChild(input);
+};
 </script>
 
 </body>

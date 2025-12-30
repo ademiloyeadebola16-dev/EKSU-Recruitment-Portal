@@ -1,63 +1,59 @@
-<?php if ($is_super): ?>
-<h2>Admin Management (Super-Admin Only)</h2>
+<?php if ($_SESSION['admin']['role'] === 'super'): ?>
+<h2>Admin Management (Super Admin Only)</h2>
 
 <table>
 <tr>
-    <th>Name</th>
     <th>Email</th>
-    <th>Status</th>
     <th>Role</th>
+    <th>Created</th>
     <th>Actions</th>
 </tr>
 
-<?php foreach ($admins as $i => $adm): ?>
+<?php foreach ($admins as $adm): ?>
 <tr>
-    <td><?= htmlspecialchars($adm['name']) ?></td>
     <td><?= htmlspecialchars($adm['email']) ?></td>
 
     <td>
-        <?php if ($adm['approved']): ?>
-            <span class="badge approved">Approved</span>
-        <?php else: ?>
-            <span class="badge pending">Pending</span>
-        <?php endif; ?>
-    </td>
-
-    <td>
-        <?php if ($adm['is_super']): ?>
+        <?php if ($adm['role'] === 'super'): ?>
             <span class="badge super">Super Admin</span>
         <?php else: ?>
-            Admin
+            <span class="badge approved">Admin</span>
         <?php endif; ?>
     </td>
 
+    <td><?= htmlspecialchars($adm['created_at'] ?? '-') ?></td>
+
     <td>
-        <?php if (!$adm['approved']): ?>
-            <!-- Approve -->
-            <a href="approve_admin.php?id=<?= intval($adm['id']) ?>" onclick="return confirm('Approve admin: <?= htmlspecialchars($adm['email']) ?>?');">
-                <button class="approve-btn manage-btn">Approve</button>
-            </a>
+        <?php if ($adm['role'] !== 'super'): ?>
 
-            <!-- Reject -->
-            <form action="reject_admin.php" method="POST" style="display:inline;" onsubmit="return confirm('Reject and remove admin: <?= htmlspecialchars($adm['email']) ?>?');">
+            <!-- Reset Password -->
+            <form method="post" action="reset_admin_password.php" style="display:inline;">
                 <input type="hidden" name="id" value="<?= intval($adm['id']) ?>">
-                <button type="submit" class="delete-btn manage-btn">Reject</button>
+                <button class="manage-btn">Reset Password</button>
             </form>
-        <?php endif; ?>
 
-        <?php if (!$adm['is_super']): ?>
-            <!-- Promote -->
-            <a href="promote_admin.php?id=<?= intval($adm['id']) ?>" onclick="return confirm('Promote admin: <?= htmlspecialchars($adm['email']) ?> to Super Admin?');">
-                <button class="promote-btn manage-btn">Promote</button>
-            </a>
+            <!-- Delete Admin -->
+            <form method="post" action="delete_admin.php" style="display:inline;"
+                  onsubmit="return confirm('Delete admin: <?= htmlspecialchars($adm['email']) ?>?');">
+                <input type="hidden" name="id" value="<?= intval($adm['id']) ?>">
+                <button class="delete-btn manage-btn">Delete</button>
+            </form>
+
         <?php else: ?>
-            <!-- Optional: Demote -->
-            <a href="demote_admin.php?id=<?= intval($adm['id']) ?>" onclick="return confirm('Demote Super Admin: <?= htmlspecialchars($adm['email']) ?> to regular admin?');">
-                <button class="promote-btn manage-btn" style="background:#ff6600;">Demote</button>
-            </a>
+            <em>Protected</em>
         <?php endif; ?>
     </td>
 </tr>
 <?php endforeach; ?>
 </table>
+
+<hr>
+
+<h3>Create New Admin</h3>
+<form method="post" action="create_admin.php">
+    <input type="email" name="email" placeholder="Admin Email" required>
+    <input type="password" name="password" placeholder="Temporary Password" required>
+    <button class="approve-btn">Create Admin</button>
+</form>
+
 <?php endif; ?>

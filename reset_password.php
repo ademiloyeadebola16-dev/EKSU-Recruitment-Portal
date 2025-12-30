@@ -1,93 +1,82 @@
 <?php
-$token = $_GET['token'] ?? '';
-$resetsFile = 'password_resets.json';
-$usersFile = 'users.json';
-$resets = file_exists($resetsFile) ? json_decode(file_get_contents($resetsFile), true) : [];
+session_start();
 
-if (!isset($resets[$token]) || $resets[$token]['expires'] < time()) {
-    die("Invalid or expired reset token.");
+$usersFile = "users.json";
+$resetsFile = "password_resets.json";
+
+$email = $_GET['email'] ?? "";
+$token = $_GET['token'] ?? "";
+
+if (!$email || !$token) {
+    die("Invalid reset link.");
 }
 
-$email = $resets[$token]['email'];
+// Load reset tokens
+$resetData = json_decode(file_get_contents($resetsFile), true);
+
+if (
+    !isset($resetData[$email]) ||
+    $resetData[$email]['token'] !== $token ||
+    $resetData[$email]['expires'] < time()
+) {
+    die("Reset link is invalid or has expired.");
+}
+
+$message = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $newPassword = password_hash($_POST['password'], PASSWORD_DEFAULT);
+    $pass1 = $_POST['password'];
+    $pass2 = $_POST['confirm_password'];
 
-    $users = json_decode(file_get_contents($usersFile), true);
-    foreach ($users as &$user) {
-        if ($user['email'] === $email) {
-            $user['password'] = $newPassword;
-            break;
+    if ($pass1 !== $pass2) {
+        $message = "Passwords do not match.";
+    } else {
+        // Load users
+        $users = json_decode(file_get_contents($usersFile), true);
+
+        // Update password
+        foreach ($users as &$u) {
+            if (strtolower($u['email']) === strtolower($email)) {
+                $u['password'] = password_hash($pass1, PASSWORD_DEFAULT);
+                break;
+            }
         }
+
+        file_put_contents($usersFile, json_encode($users, JSON_PRETTY_PRINT));
+
+        // Remove used token
+        unset($resetData[$email]);
+        file_put_contents($resetsFile, json_encode($resetData, JSON_PRETTY_PRINT));
+
+        // Redirect to login
+        header("Location: login.php?reset=success");
+        exit;
     }
-    file_put_contents($usersFile, json_encode($users, JSON_PRETTY_PRINT));
-
-    // Remove used token
-    unset($resets[$token]);
-    file_put_contents($resetsFile, json_encode($resets, JSON_PRETTY_PRINT));
-
-    header("Location: applicant_login.php?reset=1");
-    exit();
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Reset Password</title>
-<style>
-body {font-family: Arial; background:#eef1f5;}
-.container {max-width:400px;margin:80px auto;background:white;padding:25px;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,0.1);}
-input {width:100%;padding:10px;margin:10px 0;border:1px solid #ccc;border-radius:5px;}
-button {width:100%;padding:10px;background:#800000;color:white;border:none;border-radius:5px;cursor:pointer;}
-button:hover {background:#800000;}
-nav {
-      background: #800000; 
-      color: rgb(255, 255, 255);
-      padding: 15px 10%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .nav-container {
-      display: flex;
-      align-items: center;  /* vertically center items */
-      gap: 15px;            /* space between logo and text */
-    }
-    .nav-container img {
-      width: 70px;
-      height: 70px;
-      border-radius: 5px; /* optional: rounded edges */
-    }
 
-    nav h1 {
-      font-size: 22px;
-      margin: 0;
-    }
-    .nav-text h5 {
-      margin: 0;
-      font-size: 14px;
-      font-weight: normal;
-      color: #ddd; /* lighter gray subtitle */
-    }
-</style>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Reset Password</title>
 </head>
 <body>
-   <nav>
-   <div class="nav-container">
-      <img src="logo.jfif" alt="Site Logo">
-      <div class="nav-text">
-        <h1>Ekiti State University, Ado-Ekiti</h1>
-        <h5>Job Recruitment Portal</h5>
-      </div>
-    </div>
-    </nav>
-<div class="container">
-  <h2>Reset Your Password</h2>
-  <form method="POST">
-    <input type="password" name="password" placeholder="Enter new password" required>
+
+<h2>Reset Your Password</h2>
+
+<?php if ($message): ?>
+<p style="color:red;"><strong><?= $message ?></strong></p>
+<?php endif; ?>
+
+<form method="post">
+    <label>New Password</label><br>
+    <input type="password" name="password" required><br><br>
+
+    <label>Confirm Password</label><br>
+    <input type="password" name="confirm_password" required><br><br>
+
     <button type="submit">Reset Password</button>
-  </form>
-</div>
+</form>
+
 </body>
 </html>
