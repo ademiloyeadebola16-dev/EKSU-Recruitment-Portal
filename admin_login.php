@@ -1,41 +1,54 @@
 <?php
 session_start();
-
-$admins_file = 'admins.json';
-$admins = file_exists($admins_file)
-    ? json_decode(file_get_contents($admins_file), true)
-    : [];
+require 'db.php';
+require 'admin_log.php';
+log_admin_activity($pdo, 'Admin logged in');
 
 $error = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = strtolower(trim($_POST['email'] ?? ''));
     $password = $_POST['password'] ?? '';
 
-    foreach ($admins as $admin) {
-        if (strtolower($admin['email']) === $email) {
+    $stmt = $pdo->prepare("
+        SELECT id, email, password, role
+        FROM admins
+        WHERE email = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$email]);
+    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+         
+    
+  if ($admin['status'] === 'deleted') {
+    $error = "Your admin account has been removed.";
+    return;
+}
 
-            if (password_verify($password, $admin['password'])) {
+if ($admin['status'] === 'disabled') {
+    $error = "Your admin account is disabled.";
+    return;
+}
 
-                $_SESSION['admin'] = [
-                    'id'    => $admin['id'],
-                    'email' => $admin['email'],
-                    'role'  => $admin['role']
-                ];
 
-                header("Location: admin.php");
-                exit();
-            } else {
-                $error = "Invalid email or password.";
-                break;
-            }
-        }
-    }
+    if ($admin && password_verify($password, $admin['password'])) {
 
-    if (!$error) {
+        $_SESSION['admin'] = [
+            'id'    => $admin['id'],
+            'email' => $admin['email'],
+            'role'  => $admin['role']
+        ];
+   
+
+        header("Location: admin.php");
+        exit();
+
+    } else {
         $error = "Invalid email or password.";
     }
 }
 ?>
+
 
 <!doctype html>
 <html>

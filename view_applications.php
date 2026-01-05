@@ -1,12 +1,30 @@
 <?php
 session_start();
+require 'db.php';
+
 if (!isset($_SESSION['admin'])) {
     header("Location: index.php");
     exit();
 }
 
-$applications_file = 'applications.json';
-$applications = file_exists($applications_file) ? json_decode(file_get_contents($applications_file), true) : [];
+$stmt = $pdo->query("
+    SELECT 
+        id,
+        first_name,
+        middle_name,
+        last_name,
+        email,
+        job_title,
+        status,
+        internal_status,
+        reason,
+        created_at
+    FROM applications
+    ORDER BY created_at DESC
+");
+
+$applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -124,28 +142,34 @@ footer { background: #800000; color: white; text-align: center; padding: 16px; m
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($applications as $index => $app): ?>
+                <?php foreach ($applications as $app): ?>
                     <?php 
                         $fullName = trim(($app['first_name'] ?? '') . ' ' . ($app['middle_name'] ?? '') . ' ' . ($app['last_name'] ?? ''));
                         $status = ucfirst(strtolower($app['status'] ?? 'Pending'));
                         $internal = $app['internal_status'] ?? '';
                         $reason = trim($app['reason'] ?? 'No remarks available.');
                     ?>
-                    <tr data-index="<?= $index ?>" data-job="<?= htmlspecialchars($app['job_title'] ?? '') ?>">
-                        <td><?= $index + 1 ?></td>
+                    <tr data-index="<?= $app['id'] ?>" data-job="<?= htmlspecialchars($app['job_title'] ?? '') ?>">
+                        <?php static $sn = 0; $sn++; ?>
+                        <td><?= $sn ?></td>
                         <td><?= htmlspecialchars($fullName) ?></td>
                         <td><?= htmlspecialchars($app['email'] ?? '') ?></td>
                         <td><?= htmlspecialchars($app['job_title'] ?? '') ?></td>
                         <td class="status-<?= strtolower(str_replace(' ', '', $status)) ?>"><?= htmlspecialchars($status) ?></td>
                         <td><?= htmlspecialchars($internal) ?></td>
                         <td><?= nl2br(htmlspecialchars($reason)) ?></td>
-                        <td><?= htmlspecialchars($app['date'] ?? '') ?></td>
+                        <td><?= htmlspecialchars(date('Y-m-d', strtotime($app['created_at']))) ?></td>
 
                         <!-- UPDATED ACTION COLUMN -->
                         <td class="action-links">
-                            <a class="btn" href="view_applicant_detail.php?index=<?= $index ?>">View Details</a>
-                            <br>
-                            <a class="btn" style="background:#cc0000;color:#fff;margin-top:6px;display:inline-block" href="delete_application.php?index=<?= $index ?>" onclick="return confirm('Are you sure you want to delete this application?');">Delete</a>
+                            <a class="btn" href="view_applicant_detail.php?index=<?= $app['id'] ?>">View Details</a>
+
+                            <a class="btn" style="background:#cc0000;color:#fff;margin-top:6px;display:inline-block"
+                            href="delete_application.php?index=<?= $app['id'] ?>"
+                            onclick="return confirm('Are you sure you want to delete this application?');">
+                            Delete
+                            </a>
+
                         </td>
 
                     </tr>

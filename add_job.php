@@ -1,147 +1,116 @@
 <?php
 session_start();
+require 'db.php';
+require 'admin_activity_logger.php';
+
 // require admin check in your real site
 if (!isset($_SESSION['admin'])) {
     header("Location: index.php");
     exit();
 }
+$currentAdminId = $_SESSION['admin']['id'];
 
-/**
- * Load jobs.json safely and auto-fix common problems.
- * Returns an array of jobs.
- */
-function load_jobs_json($file) {
-    if (!file_exists($file)) {
-        file_put_contents($file, json_encode([], JSON_PRETTY_PRINT));
-    }
-
-    $raw = file_get_contents($file);
-    $data = json_decode($raw, true);
-
-    // If decode failed or returned non-array, try to repair:
-    if ($data === null) {
-        // If raw contains a single object (not in array), wrap it.
-        $try = @json_decode('[' . trim($raw) . ']', true);
-        if (is_array($try)) {
-            $data = $try;
-        } else {
-            $data = [];
-        }
-    } elseif (!is_array($data)) {
-        $data = [$data];
-    }
-
-    // Ensure element keys exist to avoid notices elsewhere
-    foreach ($data as $i => $job) {
-        if (!is_array($job)) $data[$i] = [];
-        $defaults = [
-            'category' => $job['category'] ?? ($job['faculty'] && $job['faculty'] !== '---' ? 'Academic' : 'Non-Academic'),
-            'title' => $job['title'] ?? $job['position'] ?? '',
-            'position' => $job['position'] ?? $job['title'] ?? '',
-            'faculty' => $job['faculty'] ?? '---',
-            'department' => $job['department'] ?? '',
-            'qualification' => $job['qualification'] ?? $job['qualification_display'] ?? '',
-            'description' => $job['description'] ?? '',
-            'requirement_qualification' => $job['requirement_qualification'] ?? '',
-            'required_experience' => isset($job['required_experience']) ? (int)$job['required_experience'] : (int)($job['requirement_experience'] ?? 0),
-            'required_publications' => isset($job['required_publications']) ? (int)$job['required_publications'] : (int)($job['requirement_publications'] ?? 0),
-            'required_body' => $job['required_body'] ?? '',
-            'research_expected' => (bool)($job['research_expected'] ?? false),
-            'custom_fields' => is_array($job['custom_fields'] ?? null) ? $job['custom_fields'] : []
-        ];
-        foreach ($defaults as $k => $v) {
-            if (!isset($data[$i][$k])) $data[$i][$k] = $v;
-        }
-    }
-
-    // Save back a canonical JSON array (avoid leaving corrupt JSON)
-    file_put_contents($file, json_encode(array_values($data), JSON_PRETTY_PRINT));
-    return $data;
-}
-
-$jobs_file = 'jobs.json';
-$jobs = load_jobs_json($jobs_file);
-
-// Handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // The form uses: title (category), position (actual job title), faculty, department ...
+
+    // category is posted as "title" in your form
     $category = trim($_POST['title'] ?? '');
     $position = trim($_POST['position'] ?? '');
-    $faculty = trim($_POST['faculty'] ?? '');
+    $faculty  = trim($_POST['faculty'] ?? '');
     $department = trim($_POST['department'] ?? '');
     $qualification = trim($_POST['qualification'] ?? '');
     $description = trim($_POST['description'] ?? '');
 
-    // admin-only requirements:
+    // admin-only requirements
     $requirement_qualification = trim($_POST['requirement_qualification'] ?? '');
     if ($requirement_qualification === 'Other') {
         $requirement_qualification = trim($_POST['requirement_qualification_other'] ?? '');
     }
-    $required_experience = (int)($_POST['required_experience'] ?? 0);
 
-    // publications auto 0 for Non-Academic
+    $requirement_experience = (int)($_POST['requirement_experience'] ?? 0);
+
+    // publications rule (UNCHANGED)
     if ($category === 'Non-Academic') {
-        $required_publications = 0;
+        $requirement_publications = 0;
     } else {
-        $required_publications = (int)($_POST['required_publications'] ?? 0);
+        $requirement_publications = (int)($_POST['requirement_publications'] ?? 0);
     }
 
-    $required_body = trim($_POST['required_body'] ?? '');
-    $research_expected = isset($_POST['research_expected']) ? true : false;
+    $requirement_body = trim($_POST['requirement_body'] ?? '');
+    $research_expected = isset($_POST['research_expected']) ? 1 : 0;
 
-    // custom fields
+    // custom fields (same logic, but stored as JSON in DB)
     $custom_fields = $_POST['custom_fields'] ?? [];
     $custom_fields = array_values(array_filter(array_map('trim', (array)$custom_fields)));
+    $custom_fields_json = json_encode($custom_fields);
 
+    // deadline
     $deadline_raw = $_POST['deadline'] ?? '';
-$deadline = $deadline_raw ? date('Y-m-d H:i:s', strtotime($deadline_raw)) : null;
+    $deadline = $deadline_raw ? date('Y-m-d H:i:s', strtotime($deadline_raw)) : null;
 
-$is_active = isset($_POST['is_active']) ? true : false;
-$now = time();
+    $is_active = isset($_POST['is_active']) ? 1 : 0;
 
-$visible_jobs = array_filter($jobs, function ($job) use ($now) {
-    // Hide disabled jobs
-    if (empty($job['is_active'])) return false;
-
-    return true;
-});
-
-
-    // Build job object using canonical keys
-    $new_job = [
-        'category' => $category,
-        'title' => $position,
-        'position' => $position,
-        'faculty' => $faculty !== '' ? $faculty : ($category === 'Non-Academic' ? '---' : ''),
-        'department' => $department,
-        'qualification' => $qualification,
-        'description' => $description,
-        'requirement_qualification' => $requirement_qualification,
-        'required_experience' => (int)$required_experience,
-        'required_publications' => (int)$required_publications,
-        'required_body' => $required_body,
-        'research_expected' => (bool)$research_expected,
-        'custom_fields' => $custom_fields,
-        'deadline' => $deadline,
-        'is_active' => $is_active,
-    ];
-
-    // reload in case changed concurrently
-    $jobs = load_jobs_json($jobs_file);
-    $jobs[] = $new_job;
-
-    // safe write: encode + check
-    $encoded = json_encode(array_values($jobs), JSON_PRETTY_PRINT);
-    if ($encoded === false) {
-        $_SESSION['message'] = "Failed to encode jobs JSON. Job not saved.";
-    } else {
-        file_put_contents($jobs_file, $encoded);
-        $_SESSION['message'] = "Job added successfully!";
+    // faculty fallback (UNCHANGED logic)
+    if ($faculty === '' && $category === 'Non-Academic') {
+        $faculty = '---';
     }
 
+    //  INSERT INTO DATABASE
+    $stmt = $pdo->prepare("
+       INSERT INTO jobs (
+    category,
+    title,
+    position,
+    faculty,
+    department,
+    qualification,
+    description,
+    requirement_qualification,
+    requirement_experience,
+    requirement_publications,
+    requirement_body,
+    research_expected,
+    custom_fields,
+    deadline,
+    is_active,
+    created_by,
+    created_at
+  )
+ VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()
+  )
+    ");
+
+    $stmt->execute([
+    $category,
+    $position,
+    $position,
+    $faculty,
+    $department,
+    $qualification,
+    $description,
+    $requirement_qualification,
+    $requirement_experience,
+    $requirement_publications,
+    $requirement_body,
+    $research_expected,
+    $custom_fields_json,
+    $deadline,
+    $is_active,
+    $currentAdminId
+]);
+
+// ✅ Log job creation activity
+log_admin_activity(
+    $pdo,
+    'Created job',
+    $position . ' (' . $category . ')'
+);
+
+    $_SESSION['message'] = "Job added successfully!";
     header("Location: admin.php");
     exit();
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -311,20 +280,20 @@ $isExpired = !empty($job['deadline']) && strtotime($job['deadline']) < time();
     </div>
 
     <div class="half">
-      <label for="required_experience">Years of Teaching Experience</label>
-      <input id="required_experience" name="required_experience" type="number" min="0" value="0" required>
+      <label for="requirement_experience">Years of Teaching Experience</label>
+      <input id="requirement_experience" name="requirement_experience" type="number" min="0" value="0" required>
     </div>
   </div>
 
   <div class="row">
     <div class="half" id="publicationsBlock">
-      <label for="required_publications">Required Number of Publications</label>
-      <input id="required_publications" name="required_publications" type="number" min="0" value="0" required>
+      <label for="requirement_publications">Required Number of Publications</label>
+      <input id="requirement_publications" name="requirement_publications" type="number" min="0" value="0" required>
     </div>
 
     <div class="half">
-      <label for="required_body">Professional Body Registration (if any)</label>
-      <input id="required_body" name="required_body" type="text" placeholder="e.g. COREN">
+      <label for="requirement_body">Professional Body Registration (if any)</label>
+      <input id="requirement_body" name="requirement_body" type="text" placeholder="e.g. COREN">
     </div>
   </div>
 
@@ -373,7 +342,7 @@ const nonAcademicPositions = [
 const categoryEl = document.getElementById('title');
 const positionEl = document.getElementById('position');
 const publicationsBlock = document.getElementById('publicationsBlock');
-const pubInput = document.getElementById('required_publications');
+const pubInput = document.getElementById('requirement_publications');
 const reqQual = document.getElementById('requirement_qualification');
 const reqQualOther = document.getElementById('requirement_qualification_other');
 

@@ -1,5 +1,6 @@
 <?php
 session_start();
+require 'db.php';
 
 // Redirect if not logged in
 if (!isset($_SESSION['applicant_email'])) {
@@ -8,20 +9,18 @@ if (!isset($_SESSION['applicant_email'])) {
 }
 
 $email = $_SESSION['applicant_email'];
-$applications_file = 'applications.json';
+$stmt = $pdo->prepare("
+    SELECT * 
+    FROM applications 
+    WHERE email = ?
+    ORDER BY created_at DESC
+");
+$stmt->execute([$email]);
+$userApplications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Load applications
-$applications = file_exists($applications_file) 
-    ? json_decode(file_get_contents($applications_file), true) 
-    : [];
-
-// Filter applications belonging to this applicant
-$userApplications = array_filter($applications, function($app) use ($email) {
-    return isset($app['email']) && $app['email'] === $email;
-});
 
 // Get the most recent application as profile info
-$profile = !empty($userApplications) ? end($userApplications) : null;
+$profile = !empty($userApplications) ? $userApplications[0] : null;
 
 // Extract profile info
 $fullName = trim(
@@ -32,11 +31,12 @@ $fullName = trim(
 
 $applicantNumber = $profile['applicant_number'] ?? 'Not Assigned';
 $passport = $profile['passport'] ?? '';
-$defaultPassport = 'default_passport.png';
+$defaultPassport = '../default_passport.png';
 
-$passportPath = (!empty($passport) && file_exists($passport))
+$passportPath = (!empty($passport) && file_exists(__DIR__ . '/' . $passport))
     ? $passport
     : $defaultPassport;
+
 
 ?>
 <!DOCTYPE html>
@@ -133,7 +133,7 @@ th { background:#800000; color:white; }
 
       <?php foreach ($userApplications as $app): ?>
         <?php
-            $status_visible = isset($app['status_visible']) && $app['status_visible'] === true;
+           $status_visible = isset($app['status_visible']) && (int)$app['status_visible'] === 1;
 
             // Default: Under Review until admin publishes the result
             $status = $status_visible ? ($app['status'] ?? 'Pending') : 'UnderReview';

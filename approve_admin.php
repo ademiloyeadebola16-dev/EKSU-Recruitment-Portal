@@ -1,24 +1,26 @@
 <?php
 session_start();
+require 'db.php';
 
-$admins_file = "admins.json";
-$admins = file_exists($admins_file) ? json_decode(file_get_contents($admins_file), true) : [];
-
-// Validate session admin
-$current = null;
-foreach ($admins as $a) {
-    if ($a['email'] === ($_SESSION['admin'] ?? '')) {
-        $current = $a;
-        break;
-    }
-}
-
-// Only super-admin can approve
-if (!$current || empty($current['is_super'])) {
+if (!isset($_SESSION['admin']['email'])) {
     $_SESSION['message'] = "Only Super Admin can approve admin accounts.";
     header("Location: admin.php");
     exit();
 }
+
+$currentEmail = $_SESSION['admin']['email'];
+
+$stmt = $pdo->prepare("SELECT * FROM admins WHERE email = ? LIMIT 1");
+$stmt->execute([$currentEmail]);
+$current = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Only super admin can approve
+if (!$current || $current['role'] !== 'super') {
+    $_SESSION['message'] = "Only Super Admin can approve admin accounts.";
+    header("Location: admin.php");
+    exit();
+}
+
 
 if (!isset($_GET['id'])) {
     $_SESSION['message'] = "Invalid request: no admin ID supplied.";
@@ -27,31 +29,28 @@ if (!isset($_GET['id'])) {
 }
 
 $id = intval($_GET['id']);
-$found = false;
+$stmt = $pdo->prepare("SELECT * FROM admins WHERE id = ? LIMIT 1");
+$stmt->execute([$id]);
+$admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
-foreach ($admins as &$admin) {
-    if (intval($admin['id']) === $id) {
-
-        // Prevent approving another Super Admin (safety)
-        if (!empty($admin['is_super'])) {
-            $_SESSION['message'] = "Cannot approve another Super Admin.";
-            header("Location: admin.php");
-            exit();
-        }
-
-        // Approve admin
-        $admin['approved'] = true;
-        $found = true;
-        break;
-    }
-}
-
-if ($found) {
-    file_put_contents($admins_file, json_encode($admins, JSON_PRETTY_PRINT));
-    $_SESSION['message'] = "Admin account approved successfully.";
-} else {
+if (!$admin) {
     $_SESSION['message'] = "Admin not found.";
+    header("Location: admin.php");
+    exit();
 }
 
+// Prevent approving another Super Admin
+if ($admin['role'] === 'super') {
+    $_SESSION['message'] = "Cannot approve another Super Admin.";
+    header("Location: admin.php");
+    exit();
+}
+
+// Approve admin
+$update = $pdo->prepare("UPDATE admins SET approved = 1 WHERE id = ?");
+$update->execute([$id]);
+
+$_SESSION['message'] = "Admin account approved successfully.";
 header("Location: admin.php");
 exit();
+

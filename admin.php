@@ -1,5 +1,9 @@
 <?php
 session_start();
+require 'db.php';
+require_once 'admin_log_functions.php';
+
+
 
 // AUTH CHECK (NEW SYSTEM)
 if (!isset($_SESSION['admin'])) {
@@ -7,12 +11,37 @@ if (!isset($_SESSION['admin'])) {
     exit();
 }
 
-$currentAdmin = $_SESSION['admin'];
-$is_super = ($currentAdmin['role'] === 'super');
+// 🔒 REVALIDATE ADMIN FROM DATABASE
+$stmt = $pdo->prepare("SELECT * FROM admins WHERE id = ? LIMIT 1");
+$stmt->execute([$_SESSION['admin']['id']]);
+$currentAdmin = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Admin no longer exists or deleted
+if (!$currentAdmin || $currentAdmin['status'] === 'deleted') {
+    session_destroy();
+    header("Location: admin_login.php?error=account_deleted");
+    exit();
+}
+
+// Disabled admin
+if ($currentAdmin['status'] === 'disabled') {
+    session_destroy();
+    header("Location: admin_login.php?error=account_disabled");
+    exit();
+}
+
+$is_super = (strtolower($currentAdmin['role']) === 'super_admin');
+$_SESSION['admin'] = $currentAdmin; // refresh session
+
 
 // Load admins (for management UI)
-$admins_file = 'admins.json';
-$admins = file_exists($admins_file) ? json_decode(file_get_contents($admins_file), true) : [];
+$stmt = $pdo->query("
+    SELECT * FROM admins 
+    WHERE status != 'deleted' 
+    ORDER BY created_at ASC
+");
+
+$admins = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 // Handle admin actions (super admin only)
@@ -25,144 +54,296 @@ $email = strtolower(trim($_POST['email']));
 $password = $_POST['password'];
 
 
-foreach ($admins as $a) {
-if ($a['email'] === $email) {
-$_SESSION['message'] = 'Admin already exists';
-header('Location: admin.php'); exit();
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM admins WHERE email = ?");
+$stmt->execute([$email]);
+
+if ($stmt->fetchColumn() > 0) {
+    $_SESSION['message'] = 'Admin already exists';
+    header('Location: admin.php'); exit();
 }
-}
+$stmt = $pdo->prepare("
+    INSERT INTO admins (email, password, role, status, created_at)
+    VALUES (?, ?, 'admin', 'active', NOW())
+");
+$stmt->execute([
+    $email,
+    password_hash($password, PASSWORD_DEFAULT)
+]);
+
+log_admin_activity(
+    $pdo,
+    'Created admin',
+    $email
+);
 
 
-$admins[] = [
-'id' => time(),
-'email' => $email,
-'password' => password_hash($password, PASSWORD_DEFAULT),
-'role' => 'admin',
-'created_at' => date('Y-m-d H:i:s')
-];
-
-
-file_put_contents($admins_file, json_encode($admins, JSON_PRETTY_PRINT));
 $_SESSION['message'] = 'Admin created successfully';
 header('Location: admin.php'); exit();
 }
 
 
-// DELETE ADMIN
-if (isset($_POST['delete_admin'])) {
-$id = $_POST['id'];
-$admins = array_filter($admins, fn($a) => $a['id'] != $id || $a['role'] === 'super');
-file_put_contents($admins_file, json_encode(array_values($admins), JSON_PRETTY_PRINT));
-$_SESSION['message'] = 'Admin deleted';
-header('Location: admin.php'); exit();
+// DELETE ADMIN (SOFT DELETE)
+if (isset($_POST['delete_admin']) && $is_super) {
+
+    $stmt = $pdo->prepare("
+        SELECT email FROM admins WHERE id = ?
+    ");
+    $stmt->execute([$_POST['id']]);
+    $target = $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("
+        DELETE FROM admins
+        WHERE id = ?
+          AND role != 'super_admin'
+    ");
+    $stmt->execute([$_POST['id']]);
+
+    log_admin_activity($pdo, 'Deleted admin', $target);
+
+    $_SESSION['message'] = 'Admin deleted successfully';
+    header('Location: admin.php');
+    exit();
 }
 
 
-// RESET PASSWORD
+//Reset Password
 if (isset($_POST['reset_password'])) {
-foreach ($admins as &$a) {
-if ($a['id'] == $_POST['id']) {
-$a['password'] = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
-break;
-}
-}
-file_put_contents($admins_file, json_encode($admins, JSON_PRETTY_PRINT));
-$_SESSION['message'] = 'Password reset successfully';
-header('Location: admin.php'); exit();
-}
-}
-// PROMOTE / DEMOTE / ENABLE / DISABLE ADMINS
-if ($is_super && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
+    $adminId = (int)$_POST['id'];
+    $newPass = trim($_POST['new_password']);
+
+    if ($newPass === '') {
+        $_SESSION['message'] = 'Password cannot be empty';
+        header('Location: admin.php');
+        exit();
+    }
+
+    $stmt = $pdo->prepare("SELECT email FROM admins WHERE id = ?");
+    $stmt->execute([$adminId]);
+    $target = $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("
+        UPDATE admins
+        SET password = ?
+        WHERE id = ?
+          AND role != 'super_admin'
+    ");
+
+    $stmt->execute([
+        password_hash($newPass, PASSWORD_DEFAULT),
+        $adminId
+    ]);
+
+    log_admin_activity($pdo, 'Reset admin password', $target);
+
+    $_SESSION['message'] = 'Password reset successfully';
+    header('Location: admin.php');
+    exit();
+}
+
+// PROMOTE / DEMOTE / ENABLE / DISABLE ADMINS
 
 // Promote to super admin
 if (isset($_POST['promote_admin'])) {
-foreach ($admins as &$a) {
-if ($a['id'] == $_POST['id'] && $a['role'] === 'admin') {
-$a['role'] = 'super';
-$_SESSION['message'] = 'Admin promoted to Super Admin';
-break;
+
+    $adminId = (int)$_POST['id'];
+
+    // Prevent self-promotion (optional but recommended)
+    if ($adminId === (int)$currentAdmin['id']) {
+        $_SESSION['message'] = 'You cannot promote yourself';
+        header('Location: admin.php');
+        exit();
+    }
+
+    // Fetch target admin email for logging
+    $stmt = $pdo->prepare("SELECT email FROM admins WHERE id = ?");
+    $stmt->execute([$adminId]);
+    $targetEmail = $stmt->fetchColumn();
+
+    if (!$targetEmail) {
+        $_SESSION['message'] = 'Admin not found';
+        header('Location: admin.php');
+        exit();
+    }
+
+    // Promote admin → super_admin
+    $stmt = $pdo->prepare("
+        UPDATE admins
+        SET role = 'super_admin'
+        WHERE id = ?
+          AND role = 'admin'
+    ");
+    $stmt->execute([$adminId]);
+
+    if ($stmt->rowCount() > 0) {
+        log_admin_activity(
+            $pdo,
+            'Promoted admin to Super Admin',
+            $targetEmail
+        );
+        $_SESSION['message'] = 'Admin promoted to Super Admin';
+    } else {
+        $_SESSION['message'] = 'Promotion not allowed';
+    }
+
+    header('Location: admin.php');
+    exit();
 }
-}
-}
+
+
 
 
 // Demote super admin
 if (isset($_POST['demote_admin'])) {
-foreach ($admins as &$a) {
-if ($a['id'] == $_POST['id'] && $a['role'] === 'super' && $a['email'] !== $currentAdmin['email']) {
-$a['role'] = 'admin';
-$_SESSION['message'] = 'Super Admin demoted';
-break;
+
+    $adminId = (int)$_POST['id'];
+
+    // Prevent self-demotion
+    if ($adminId === (int)$currentAdmin['id']) {
+        $_SESSION['message'] = 'You cannot demote yourself';
+        header('Location: admin.php');
+        exit();
+    }
+
+    // Get target admin email for logging
+    $stmt = $pdo->prepare("SELECT email FROM admins WHERE id = ?");
+    $stmt->execute([$adminId]);
+    $targetEmail = $stmt->fetchColumn();
+
+    if (!$targetEmail) {
+        $_SESSION['message'] = 'Admin not found';
+        header('Location: admin.php');
+        exit();
+    }
+
+    // Demote super admin → admin
+    $stmt = $pdo->prepare("
+        UPDATE admins
+        SET role = 'admin'
+        WHERE id = ?
+          AND role = 'super_admin'
+    ");
+    $stmt->execute([$adminId]);
+
+    if ($stmt->rowCount() > 0) {
+        log_admin_activity(
+            $pdo,
+            'Demoted super admin',
+            $targetEmail
+        );
+        $_SESSION['message'] = 'Admin demoted to regular admin';
+    } else {
+        $_SESSION['message'] = 'Action not allowed';
+    }
+
+    header('Location: admin.php');
+    exit();
 }
-}
-}
+
 
 
 // Disable admin
 if (isset($_POST['disable_admin'])) {
-foreach ($admins as &$a) {
-if ($a['id'] == $_POST['id'] && $a['role'] !== 'super') {
-$a['status'] = 'disabled';
-$_SESSION['message'] = 'Admin disabled';
-break;
-}
-}
+
+    $adminId = (int)$_POST['id'];
+
+    // Get target admin email for logging
+    $stmt = $pdo->prepare("SELECT email FROM admins WHERE id = ?");
+    $stmt->execute([$adminId]);
+    $targetEmail = $stmt->fetchColumn();
+
+    // Prevent disabling super admins
+    $stmt = $pdo->prepare("
+        UPDATE admins
+        SET status = 'disabled'
+        WHERE id = ?
+          AND role != 'super_admin'
+    ");
+    $stmt->execute([$adminId]);
+
+    if ($stmt->rowCount() > 0) {
+        log_admin_activity(
+            $pdo,
+            'Disabled admin',
+            $targetEmail
+        );
+        $_SESSION['message'] = 'Admin disabled successfully';
+    } else {
+        $_SESSION['message'] = 'Action not allowed';
+    }
+
+    header('Location: admin.php');
+    exit();
 }
 
 
-// Enable admin
+
 if (isset($_POST['enable_admin'])) {
-foreach ($admins as &$a) {
-if ($a['id'] == $_POST['id']) {
-$a['status'] = 'active';
-$_SESSION['message'] = 'Admin enabled';
-break;
-}
-}
+
+    $adminId = (int)$_POST['id'];
+
+    // Get target admin email for logging
+    $stmt = $pdo->prepare("SELECT email FROM admins WHERE id = ?");
+    $stmt->execute([$adminId]);
+    $targetEmail = $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("
+        UPDATE admins
+        SET status = 'active'
+        WHERE id = ?
+    ");
+    $stmt->execute([$adminId]);
+
+    if ($stmt->rowCount() > 0) {
+        log_admin_activity(
+            $pdo,
+            'Enabled admin',
+            $targetEmail
+        );
+        $_SESSION['message'] = 'Admin enabled successfully';
+    } else {
+        $_SESSION['message'] = 'Action failed';
+    }
+
+    header('Location: admin.php');
+    exit();
 }
 
 
-file_put_contents($admins_file, json_encode($admins, JSON_PRETTY_PRINT));
 header('Location: admin.php'); exit();
+
 }
 // Load jobs
-$jobs_file = 'jobs.json';
-$jobs = file_exists($jobs_file) ? json_decode(file_get_contents($jobs_file), true) : [];
-$updated = false;
-$now = time();
+$stmt = $pdo->query("
+    SELECT *
+    FROM jobs
+    ORDER BY created_at DESC
+");
+$jobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-foreach ($jobs as $i => $job) {
-    if (!empty($job['deadline'])) {
-        if (strtotime($job['deadline']) < $now && !empty($job['is_active'])) {
-            $jobs[$i]['is_active'] = false; // auto-disable
-            $updated = true;
-        }
-    }
-}
-
-if ($updated) {
-    file_put_contents($jobs_file, json_encode(array_values($jobs), JSON_PRETTY_PRINT));
-}
-
-$isClosed = !empty($job['deadline']) && strtotime($job['deadline']) < time();
 $isExpired = !empty($job['deadline']) && strtotime($job['deadline']) < time();
 $isActive  = $job['is_active'] ?? true;
+
 
 // Handle new job creation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['title'])) {
     $jobs[] = [
-        'title' => trim($_POST['title']),
-        'faculty' => trim($_POST['faculty']),
-        'department' => trim($_POST['department']),
-        'position' => trim($_POST['position']),
-        'qualification' => trim($_POST['qualification']),
-        'description' => trim($_POST['description']),
-        'requirement_qualification' => trim($_POST['requirement_qualification']),
-        'requirement_experience' => trim($_POST['requirement_experience']),
-        'requirement_publications' => trim($_POST['requirement_publications']),
-        'requirement_body' => trim($_POST['requirement_body'])
-    ];
+    'category' => trim($_POST['category'] ?? 'General'),
+    'title' => trim($_POST['title']),
+    'faculty' => trim($_POST['faculty']),
+    'department' => trim($_POST['department']),
+    'position' => trim($_POST['position']),
+    'qualification' => trim($_POST['qualification']),
+    'qualification_display' => trim($_POST['qualification']),
+    'description' => trim($_POST['description']),
+    'deadline' => trim($_POST['deadline'] ?? ''),
+    'is_active' => true,
+
+    'requirement_qualification' => trim($_POST['requirement_qualification']),
+    'requirement_experience' => trim($_POST['requirement_experience']),
+    'requirement_publications' => trim($_POST['requirement_publications']),
+    'requirement_body' => trim($_POST['requirement_body'])
+];
     file_put_contents($jobs_file, json_encode($jobs, JSON_PRETTY_PRINT));
     $_SESSION['message'] = "Job added successfully!";
     header("Location: admin.php");
@@ -238,7 +419,7 @@ th {background:#800000;color:white;}
 <tr>
 <td><?= htmlspecialchars($adm['email']) ?></td>
 <td>
-<?php if ($adm['role'] === 'super'): ?>
+<?php if ($adm['role'] === 'super_admin'): ?>
 <span class="badge super">Super Admin</span>
 <?php else: ?>
 <span class="badge approved">Admin</span>
@@ -282,6 +463,42 @@ th {background:#800000;color:white;}
 </form>
 <?php endif; ?>
 
+<?php if (
+    $is_super &&
+    $adm['email'] !== $currentAdmin['email'] &&
+    $adm['role'] !== 'super_admin'
+): ?>
+<form method="post" style="display:inline;"
+      onsubmit="return confirm('Delete this admin permanently?');">
+    <input type="hidden" name="id" value="<?= $adm['id'] ?>">
+    <button class="delete-btn manage-btn" name="delete_admin">
+        Delete
+    </button>
+</form>
+<?php endif; ?>
+
+
+    <!-- RESET PASSWORD (Super Admin Only) -->
+<form method="post" style="display:inline-flex; gap:6px; align-items:center;"
+      onsubmit="return confirm('Reset password for this admin?');">
+
+    <input type="hidden" name="id" value="<?= $adm['id'] ?>">
+
+    <input type="password"
+           name="new_password"
+           placeholder="New password"
+           required
+           style="padding:6px; width:140px;">
+
+    <button type="submit"
+            class="manage-btn"
+            style="background:#004080;"
+            name="reset_password">
+        Reset
+    </button>
+</form>
+
+
 
 <?php else: ?>
 <em>Current User</em>
@@ -290,6 +507,25 @@ th {background:#800000;color:white;}
 </tr>
 <?php endforeach; ?>
 </table>
+<?php if ($is_super): ?>
+<hr>
+
+<h3>System Monitoring</h3>
+
+<a href="admin_logs.php"
+   style="
+     display:inline-block;
+     margin-top:10px;
+     background:#800000;
+     color:white;
+     padding:10px 18px;
+     border-radius:6px;
+     text-decoration:none;
+     font-weight:bold;
+   ">
+   View Admin Activity Logs
+</a>
+<?php endif; ?>
 
 <h3>Create New Admin</h3>
 <form method="post">
@@ -315,23 +551,20 @@ th {background:#800000;color:white;}
     <th>Action</th> 
 </tr>
 
-<?php foreach ($jobs as $index => $job): ?>
+<?php foreach ($jobs as $job): ?>
 <?php
     $isExpired = !empty($job['deadline']) && strtotime($job['deadline']) < time();
-    $isActive  = $job['is_active'] ?? true;
+$isActive  = (int)$job['is_active'] === 1;
+
 ?>
 <tr>
     <td><?= htmlspecialchars($job['category']) ?></td>
-    <td><?= htmlspecialchars($job['faculty']) ?></td>
-    <td><?= htmlspecialchars($job['department']) ?></td>
-    <td><?= htmlspecialchars($job['position']) ?></td>
-   <td><?= htmlspecialchars($job['qualification_display'] ?? $job['qualification'] ?? 'N/A') ?></td>
+<td><?= htmlspecialchars($job['faculty'] ?: '---') ?></td>
+<td><?= htmlspecialchars($job['department']) ?></td>
+<td><?= htmlspecialchars($job['position']) ?></td>
+<td><?= htmlspecialchars($job['qualification']) ?></td>
 <td>
-    <?php if (!empty($job['is_active'])): ?>
-        <span style="color:green;font-weight:bold;">Active</span>
-    <?php else: ?>
-        <span style="color:red;font-weight:bold;">Inactive</span>
-    <?php endif; ?>
+    <?= $isActive ? '<span style="color:green">Active</span>' : '<span style="color:red">Inactive</span>' ?>
 </td>
 
     <td>
@@ -347,24 +580,18 @@ th {background:#800000;color:white;}
         <br><br>
 
         <!-- ACTION BUTTONS -->
-        <a href="edit_job.php?index=<?= $index ?>"
-           class="manage-btn"
-           style="background:#0066cc;">Edit</a>
+        <a href="edit_job.php?id=<?= $job['id'] ?>">Edit</a>
 
-        <a href="toggle_job.php?id=<?= $index ?>"
-           class="manage-btn"
-           style="background:#008000;"
-           onclick="return confirm('Change job visibility?')">
-           <?= $isActive ? 'Disable' : 'Enable' ?>
-        </a>
+<a href="toggle_job.php?id=<?= $job['id'] ?>"
+   onclick="return confirm('Change job visibility?')">
+   <?= $isActive ? 'Disable' : 'Enable' ?>
+</a>
 
-        <form action="delete_job.php"
-              method="POST"
-              style="display:inline;"
-              onsubmit="return confirm('Delete this job?');">
-            <input type="hidden" name="id" value="<?= $index ?>">
-            <button type="submit" class="delete-btn manage-btn">Delete</button>
-        </form>
+<form action="delete_job.php" method="POST">
+    <input type="hidden" name="id" value="<?= $job['id'] ?>">
+    <button type="submit">Delete</button>
+</form>
+
     </td>
 </tr>
 <?php endforeach; ?>

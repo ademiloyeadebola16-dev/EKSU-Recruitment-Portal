@@ -6,27 +6,8 @@ if (!isset($_SESSION['admin'])) {
     exit();
 }
 
+require 'db.php';
 require_once 'job_guard.php';
-
-$applications_file = 'applications.json';
-$jobs_file         = 'jobs.json';
-
-/* ===============================
-   LOAD DATA
-   =============================== */
-$applications = file_exists($applications_file)
-    ? json_decode(file_get_contents($applications_file), true)
-    : [];
-
-$jobs = file_exists($jobs_file)
-    ? json_decode(file_get_contents($jobs_file), true)
-    : [];
-
-if (!$applications || !$jobs) {
-    $_SESSION['message'] = "No data found for evaluation.";
-    header("Location: view_applications.php");
-    exit();
-}
 
 /* ===============================
    QUALIFICATION RANKING
@@ -60,9 +41,15 @@ function normalize_number($value) {
     return isset($m[0]) ? (int)$m[0] : 0;
 }
 
-function normalize_qualification_list($value) {
-    if (!$value) return [];
-    return array_map('norm_qual', explode(',', strtolower($value)));
+/* ===============================
+   LOAD APPLICATIONS
+   =============================== */
+$applications = $pdo->query("SELECT * FROM applications")->fetchAll(PDO::FETCH_ASSOC);
+
+if (!$applications) {
+    $_SESSION['message'] = "No applications found for evaluation.";
+    header("Location: view_applications.php");
+    exit();
 }
 
 /* ===============================
@@ -70,28 +57,21 @@ function normalize_qualification_list($value) {
    =============================== */
 $applicantJobCount = [];
 foreach ($applications as $a) {
-    $email = strtolower(trim($a['email'] ?? ''));
-    if ($email) {
-        $applicantJobCount[$email] = ($applicantJobCount[$email] ?? 0) + 1;
-    }
+    $email = strtolower(trim($a['email']));
+    $applicantJobCount[$email] = ($applicantJobCount[$email] ?? 0) + 1;
 }
 
 /* ===============================
    START EVALUATION
    =============================== */
-foreach ($applications as &$app) {
-
-    /* HARD RESET */
-    $app['status'] = 'Pending';
-    $app['reason'] = '';
+foreach ($applications as $app) {
 
     $qualified = true;
     $reasons   = [];
 
     if (empty($app['email']) || empty($app['job_title'])) {
-        $app['status'] = 'Not Qualified';
-        $app['reason'] = "Incomplete application data.";
-        continue;
+        $qualified = false;
+        $reasons[] = "Incomplete application data";
     }
 
     $email    = strtolower(trim($app['email']));
@@ -103,102 +83,95 @@ foreach ($applications as &$app) {
         $reasons[] = "Applied for more than 2 job positions";
     }
 
-    /* FIND MATCHING JOB */
-    $matchedJob = null;
-    foreach ($jobs as $job) {
-        if (
-            strtolower(trim($job['title'] ?? '')) === $jobTitle ||
-            strtolower(trim($job['position'] ?? '')) === $jobTitle
-        ) {
-            $matchedJob = $job;
-            break;
-        }
-    }
+    /* FIND JOB */
+    $stmt = $pdo->prepare("
+        SELECT * FROM jobs
+        WHERE LOWER(title) = ? OR LOWER(position) = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$jobTitle, $jobTitle]);
+    $job = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$matchedJob) {
+    if (!$job) {
         $qualified = false;
         $reasons[] = "Job does not exist";
-    } elseif (!isJobOpen($matchedJob)) {
+    } elseif (!isJobOpen($job)) {
         $qualified = false;
         $reasons[] = "Job application is closed";
     }
 
-    $appQual   = $app['academic_qualification'] ?? '';
-$appExp    = normalize_number($app['experience_years'] ?? 0);
-$appPub    = normalize_number($app['publications'] ?? 0);
-$appBodies = normalize_list($app['professional_body'] ?? '');
+    if ($job) {
 
-$jobCategory = $matchedJob['category'] ?? 'Academic';
+        $appQual   = $app['academic_qualification'];
+        $appExp    = normalize_number($app['experience_years']);
+        $appPub    = normalize_number($app['publications']);
+        $appBodies = normalize_list($app['professional_body']);
 
-$reqQual   = trim($matchedJob['requirement_qualification'] ?? '');
-$reqExp    = normalize_number($matchedJob['required_experience'] ?? 0);
-$reqPub    = normalize_number($matchedJob['required_publications'] ?? 0);
-$reqBodies = normalize_list($matchedJob['required_body'] ?? '');
+        $reqQual   = trim($job['requirement_qualification']);
+        $reqExp    = normalize_number($job['requirement_experience']);
+        $reqPub    = normalize_number($job['requirement_publications']);
+        $reqBodies = normalize_list($job['requirement_body']);
+        $category  = $job['category'] ?? 'Academic';
 
-/* ===== ACADEMIC QUALIFICATION ===== */
-$appRank = $rank[norm_qual($appQual)] ?? 0;
-$reqRank = $rank[norm_qual($reqQual)] ?? 0;
+        /* ACADEMIC QUALIFICATION */
+        $appRank = $rank[norm_qual($appQual)] ?? 0;
+        $reqRank = $rank[norm_qual($reqQual)] ?? 0;
 
-if ($reqQual !== '' && $appRank < $reqRank) {
-    $qualified = false;
-    $reasons[] =
-        "Academic qualification mismatch (Required: {$reqQual}, Applicant: {$appQual})";
-}
+        if ($reqQual && $appRank < $reqRank) {
+            $qualified = false;
+            $reasons[] = "Academic qualification mismatch (Required: $reqQual, Applicant: $appQual)";
+        }
 
-/* ===== EXPERIENCE (MANDATORY FOR ALL) ===== */
-if ($appExp < $reqExp) {
-    $qualified = false;
-    $reasons[] =
-        "Insufficient experience (Required: {$reqExp} yrs, Applicant: {$appExp} yrs)";
-}
+        /* EXPERIENCE */
+        if ($appExp < $reqExp) {
+            $qualified = false;
+            $reasons[] = "Insufficient experience (Required: {$reqExp} yrs, Applicant: {$appExp} yrs)";
+        }
 
-/* ===== PUBLICATIONS (ACADEMIC ONLY) ===== */
-if ($jobCategory === 'Academic' && $reqPub > 0) {
-    if ($appPub < $reqPub) {
-        $qualified = false;
-        $reasons[] =
-            "Insufficient publications (Required: {$reqPub}, Applicant: {$appPub})";
-    }
-}
+        /* PUBLICATIONS */
+        if ($category === 'Academic' && $reqPub > 0 && $appPub < $reqPub) {
+            $qualified = false;
+            $reasons[] = "Insufficient publications (Required: $reqPub, Applicant: $appPub)";
+        }
 
-/* ===== PROFESSIONAL BODY (AT LEAST ONE MATCH) ===== */
-if (!empty($reqBodies)) {
-    $match = false;
-    foreach ($reqBodies as $rb) {
-        foreach ($appBodies as $ab) {
-            if (stripos($ab, $rb) !== false || stripos($rb, $ab) !== false) {
-                $match = true;
-                break 2;
+        /* PROFESSIONAL BODY */
+        if ($reqBodies) {
+            $match = false;
+            foreach ($reqBodies as $rb) {
+                foreach ($appBodies as $ab) {
+                    if (stripos($ab, $rb) !== false || stripos($rb, $ab) !== false) {
+                        $match = true;
+                        break 2;
+                    }
+                }
+            }
+
+            if (!$match) {
+                $qualified = false;
+                $reasons[] = "Professional body mismatch (Required: " .
+                    strtoupper(implode(', ', $reqBodies)) .
+                    ", Applicant: " .
+                    strtoupper(implode(', ', $appBodies ?: ['NONE'])) . ")";
             }
         }
     }
 
-    if (!$match) {
-        $qualified = false;
-        $reasons[] =
-            "Professional body mismatch (Required: " .
-            strtoupper(implode(', ', $reqBodies)) .
-            ", Applicant: " .
-            strtoupper(implode(', ', $appBodies ?: ['NONE'])) . ")";
-    }
-}
-
-    /* ===============================
-       FINAL RESULT
-       =============================== */
+    /* SAVE RESULT */
     if ($qualified) {
-        $app['status'] = 'Qualified';
-        $app['reason'] = "All job requirements met";
+        $status = 'Qualified';
+        $reason = 'All job requirements met';
     } else {
-        $app['status'] = 'Not Qualified';
-        $app['reason'] = implode('; ', array_unique($reasons));
+        $status = 'Not Qualified';
+        $reason = implode('; ', array_unique($reasons));
     }
+
+    $update = $pdo->prepare("
+        UPDATE applications 
+        SET status = ?, reason = ?
+        WHERE id = ?
+    ");
+    $update->execute([$status, $reason, $app['id']]);
 }
-
-unset($app);
-
-/* SAVE RESULTS */
-file_put_contents($applications_file, json_encode($applications, JSON_PRETTY_PRINT));
 
 $_SESSION['message'] = "Application evaluation completed successfully.";
 header("Location: view_applications.php");

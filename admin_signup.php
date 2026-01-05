@@ -1,16 +1,8 @@
 <?php
 session_start();
+require_once 'db.php';
 
-// Helper to load admins
-function load_admins() {
-    $file = 'admins.json';
-    return file_exists($file) ? json_decode(file_get_contents($file), true) : [];
-}
-
-// Helper to save admins
-function save_admins($admins) {
-    file_put_contents('admins.json', json_encode(array_values($admins), JSON_PRETTY_PRINT));
-}
+$error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -22,40 +14,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Please fill all fields.";
     } else {
 
-        $admins = load_admins();
+        /* ---------------- CHECK EMAIL UNIQUE ---------------- */
+        $stmt = $pdo->prepare("SELECT id FROM admins WHERE email = ? LIMIT 1");
+        $stmt->execute([$email]);
 
-        // Ensure email is unique
-        foreach ($admins as $admin) {
-            if (strcasecmp($admin['email'], $email) === 0) {
-                $error = "An admin with this email already exists.";
-                break;
-            }
-        }
+        if ($stmt->fetch()) {
+            $error = "An admin with this email already exists.";
+        } else {
 
-        if (empty($error)) {
+            /* ---------------- INSERT ADMIN ---------------- */
+            $stmt = $pdo->prepare("
+                INSERT INTO admins (
+                    name,
+                    email,
+                    password_hash,
+                    approved,
+                    is_super,
+                    created_at
+                ) VALUES (?, ?, ?, 0, 0, NOW())
+            ");
 
-            // Generate unique ID
-            $maxId = 0;
-            foreach ($admins as $admin) {
-                if (isset($admin['id']) && $admin['id'] > $maxId) {
-                    $maxId = $admin['id'];
-                }
-            }
-
-            // Construct new admin record
-            $newAdmin = [
-                'id'            => $maxId + 1,
-                'name'          => $name,
-                'email'         => $email,
-                'password_hash' => password_hash($password, PASSWORD_DEFAULT),
-                'approved'      => false, // super admin must approve
-                'is_super'      => false,
-                'date'          => date('Y-m-d H:i:s')
-            ];
-
-            // Save into JSON
-            $admins[] = $newAdmin;
-            save_admins($admins);
+            $stmt->execute([
+                $name,
+                $email,
+                password_hash($password, PASSWORD_DEFAULT)
+            ]);
 
             $_SESSION['message'] = "Signup successful. Your account is awaiting approval by the Super Admin.";
             header("Location: admin_login.php");
@@ -95,8 +78,6 @@ input {
     border: 1px solid #ccc;
     border-radius: 5px;
 }
-
-/* Password wrapper */
 .password-wrapper {
     position: relative;
 }
@@ -109,7 +90,6 @@ input {
     font-size: 16px;
     color: #555;
 }
-
 button {
     width: 100%;
     background: #800000;

@@ -1,42 +1,31 @@
 <?php
 session_start();
+require 'db.php';
+require_once 'job_guard.php';
+
+
+
 if (!isset($_SESSION['applicant_email'])) {
     header("Location: applicant_login.php");
     exit();
 }
 
-$email = $_SESSION['applicant_email'];
-$job_id = isset($_GET['job_id']) ? $_GET['job_id'] : null;
-
-// Load job details
-$jobs_file = __DIR__ . '/jobs.json';
-$jobs = file_exists($jobs_file) ? json_decode(file_get_contents($jobs_file), true) : [];
-if ($job_id === null || !isset($jobs[$job_id])) {
-    echo "Invalid or missing job ID.";
-    exit();
-}
-if (
-    (isset($job['is_active']) && $job['is_active'] === false) ||
-    (!empty($job['deadline']) && strtotime($job['deadline']) < time())
-) {
-    die("This job is closed.");
-}
-require_once 'job_guard.php';
-
+$email  = $_SESSION['applicant_email'];
 $job_id = $_GET['job_id'] ?? null;
-if ($job_id === null || !isset($jobs[$job_id])) {
+
+if (!$job_id) {
     die("Invalid job.");
 }
 
-$job = $jobs[$job_id];
+$stmt = $pdo->prepare("SELECT * FROM jobs WHERE id = ?");
+$stmt->execute([$job_id]);
+$job = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if (!isJobOpen($job)) {
+if (!$job || !isJobOpen($job)) {
     die("You cannot apply for this job. This position is closed.");
 }
 
-// Load existing applications
-$applications_file = __DIR__ . '/applications.json';
-$applications = file_exists($applications_file) ? json_decode(file_get_contents($applications_file), true) : [];
+
 
 /**
  * Generate applicant number in format:
@@ -44,32 +33,28 @@ $applications = file_exists($applications_file) ? json_decode(file_get_contents(
  *
  * Finds the highest existing NNNN for the current year in $applications and returns next.
  */
-function generateApplicantNumber($applications) {
+function generateApplicantNumber(PDO $pdo) {
     $year = date('Y');
-    $max = 0;
 
-    if (!empty($applications) && is_array($applications)) {
-        foreach ($applications as $app) {
-            if (!empty($app['applicant_number']) && is_string($app['applicant_number'])) {
-                // Expected format EKSU/APP/2025/0001
-                $parts = explode('/', $app['applicant_number']);
-                if (count($parts) === 4) {
-                    $appYear = $parts[2];
-                    $numPart = $parts[3];
-                    if ($appYear === $year) {
-                        // strip non-digits just in case and parse
-                        $numDigits = preg_replace('/\D/', '', $numPart);
-                        $n = intval($numDigits);
-                        if ($n > $max) $max = $n;
-                    }
-                }
-            }
+    $stmt = $pdo->prepare("
+        SELECT applicant_number 
+        FROM applications 
+        WHERE applicant_number LIKE ?
+        ORDER BY id DESC 
+        LIMIT 1
+    ");
+    $stmt->execute(["EKSU/APP/{$year}/%"]);
+    $last = $stmt->fetchColumn();
+
+    $next = 1;
+    if ($last) {
+        $parts = explode('/', $last);
+        if (count($parts) === 4) {
+            $next = intval($parts[3]) + 1;
         }
     }
 
-    $next = $max + 1;
-    $padded = str_pad($next, 4, '0', STR_PAD_LEFT);
-    return "EKSU/APP/{$year}/{$padded}";
+    return "EKSU/APP/{$year}/" . str_pad($next, 4, '0', STR_PAD_LEFT);
 }
 
 /*
@@ -83,13 +68,14 @@ if (file_exists(__DIR__ . '/send_application_mail.php')) {
 }
 
 // Check if applicant already applied for this job (prevent duplicate)
-$has_applied = false;
-foreach ($applications as $app) {
-    if (isset($app['email']) && $app['email'] === $email && isset($app['job_id']) && $app['job_id'] == $job_id) {
-        $has_applied = true;
-        break;
-    }
-}
+$stmt = $pdo->prepare("
+    SELECT COUNT(*) 
+    FROM applications 
+    WHERE email = ? AND job_id = ?
+");
+$stmt->execute([$email, $job_id]);
+$has_applied = $stmt->fetchColumn() > 0;
+
 
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
@@ -128,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
     }
 
     // --- fuzzy matching for academic qualification & professional body (80% threshold) ---
-    $job_qual = strtolower(trim($job['qualification'] ?? ''));
+   $job_qual = strtolower(trim($job['requirement_qualification'] ?? ''));
     $applicant_qual = strtolower(trim($_POST['academic_qualification'] ?? ''));
     $qual_similarity = 0;
     if ($job_qual !== '' && $applicant_qual !== '') {
@@ -146,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
     $meets_body = ($body_similarity >= 80);
 
     // internal evaluation (for admin) — don't reveal to applicant until admin toggles
-    $internal_status = ($meets_qual && $meets_body) ? 'Qualified' : 'Not Qualified';
+    $internal_status = 'Pending';
 
     // Applicant-visible status defaults to Under Review (admin will change later)
     $public_status = 'Under Review';
@@ -154,7 +140,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
 
     // --- handle custom requirement responses (both text and file) ---
     $custom_requirements_responses = [];
-    $custom_fields = $job['custom_fields'] ?? [];
+    $custom_fields = [];
+
+if (!empty($job['custom_fields'])) {
+    if (is_string($job['custom_fields'])) {
+        $decoded = json_decode($job['custom_fields'], true);
+        $custom_fields = is_array($decoded) ? $decoded : [];
+    } elseif (is_array($job['custom_fields'])) {
+        $custom_fields = $job['custom_fields'];
+    }
+}
+
     $custom_texts = $_POST['custom_text'] ?? [];
     $custom_files = $_FILES['custom_file'] ?? null;
 
@@ -211,43 +207,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
     $academic_records = [];
     $insts = $_POST['inst_name'] ?? [];
     $quals = $_POST['inst_qualification'] ?? [];
-    $froms = $_POST['inst_from'] ?? [];
-    $tos = $_POST['inst_to'] ?? [];
+   $fromMonths = $_POST['inst_month_from'] ?? [];
+$fromYears  = $_POST['inst_year_from'] ?? [];
+$toMonths   = $_POST['inst_month_to'] ?? [];
+$toYears    = $_POST['inst_year_to'] ?? [];
+
     $cert_files = $_FILES['institution_certificate'] ?? null;
 
     $acad_dir = __DIR__ . '/uploads/academic_records/';
     if (!file_exists($acad_dir)) mkdir($acad_dir, 0777, true);
 
-    $maxCount = max(count($insts), count($quals), count($froms), count($tos));
-    for ($i = 0; $i < $maxCount; $i++) {
-        $n = $sanitize($insts[$i] ?? '');
-        $q = $sanitize($quals[$i] ?? '');
-        $f = $sanitize($froms[$i] ?? '');
-        $t = $sanitize($tos[$i] ?? '');
-        $cert_path = '';
+    $maxCount = max(
+    count($insts),
+    count($quals),
+    count($fromMonths),
+    count($fromYears)
+);
 
-        if ($cert_files && isset($cert_files['error'][$i]) && $cert_files['error'][$i] === UPLOAD_ERR_OK) {
-            $ext = pathinfo($cert_files['name'][$i], PATHINFO_EXTENSION);
-            $safe = 'cert_' . time() . '_' . $i . '_' . bin2hex(random_bytes(4)) . '.' . preg_replace('/[^a-z0-9]/i','', $ext);
-            $target = $acad_dir . $safe;
-            if (move_uploaded_file($cert_files['tmp_name'][$i], $target)) {
-                $cert_path = 'uploads/academic_records/' . $safe;
-            }
+for ($i = 0; $i < $maxCount; $i++) {
+    $n = $sanitize($insts[$i] ?? '');
+    $q = $sanitize($quals[$i] ?? '');
+
+    $from = ($fromMonths[$i] ?? '') && ($fromYears[$i] ?? '')
+        ? $fromMonths[$i] . '/' . $fromYears[$i]
+        : '';
+
+    $to = ($toMonths[$i] ?? '') && ($toYears[$i] ?? '')
+        ? $toMonths[$i] . '/' . $toYears[$i]
+        : '';
+
+    $cert_path = '';
+
+    if ($cert_files && isset($cert_files['error'][$i]) && $cert_files['error'][$i] === UPLOAD_ERR_OK) {
+        $ext = pathinfo($cert_files['name'][$i], PATHINFO_EXTENSION);
+        $safe = 'cert_' . time() . '_' . $i . '_' . bin2hex(random_bytes(4)) . '.' . preg_replace('/[^a-z0-9]/i','', $ext);
+        $target = $acad_dir . $safe;
+        if (move_uploaded_file($cert_files['tmp_name'][$i], $target)) {
+            $cert_path = 'uploads/academic_records/' . $safe;
         }
-
-        if ($n === '' && $q === '') continue; // skip completely blank rows
-
-        $academic_records[] = [
-            'institution' => $n,
-            'qualification' => $q,
-            'from' => $f,
-            'to' => $t,
-            'certificate' => $cert_path
-        ];
     }
 
+    if ($n === '' && $q === '') continue;
+
+    $academic_records[] = [
+        'institution' => $n,
+        'qualification' => $q,
+        'from' => $from,
+        'to' => $to,
+        'certificate' => $cert_path
+    ];
+}
+
     // --- Generate applicant number (NEW) ---
-    $applicant_number = generateApplicantNumber($applications);
+   $applicant_number = generateApplicantNumber($pdo);
 
     // --- assemble application entry ---
     $newApplication = [
@@ -280,7 +292,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
         'cv' => $cv_path,
         'passport' => $passport_path,
         'academic_records' => $academic_records,
-        'referees' => $referees,
         'internal_status' => $internal_status,
         'status' => $public_status,
         'reason' => $reason,
@@ -292,35 +303,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
         'applicant_number' => $applicant_number // <-- saved here
     ];
 
-    // Append and save
-    $applications[] = $newApplication;
-    $saved = file_put_contents($applications_file, json_encode($applications, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    $stmt = $pdo->prepare("
+    INSERT INTO applications (
+        applicant_number, email, job_id, job_title, department,
+        first_name, middle_name, last_name, phone, dob, pob, gender,
+        nationality, marital_status, children, permanent_address,
+        state, home_town, lga,
+        academic_qualification, academic_qualification_other,
+        professional_body, publications, experience_years,
+        cover_letter, cv, passport,
+        academic_records, custom_requirements,
+        internal_status, status, reason,
+        qualification_similarity, body_similarity,
+        status_visible, created_at
+    ) VALUES (
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW()
+    )
+");
 
-    if ($saved !== false) {
-        // Send email notification AFTER successful save (applicant gets "Under Review" message)
-        if (function_exists('sendApplicantMail')) {
-            $toEmail = $email;
-            $toName = trim($first_name . ' ' . $last_name);
-            $jobPosition = $job['position'] ?? 'Job Application';
-            try {
-                // If sendApplicantMail supports applicant number, pass it as 4th arg (optional)
-                // sendApplicantMail($toEmail, $toName, $jobPosition, $applicant_number);
-                sendApplicantMail($toEmail, $toName, $jobPosition);
-            } catch (\Throwable $e) {
-                // optional: log error to a file for debugging (do not expose to user)
-                @file_put_contents(__DIR__ . '/email_errors.log', date('c') . " - sendApplicantMail error: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
-            }
+$saved = $stmt->execute([
+    $applicant_number,
+    $email,
+    $job_id,
+    $job['title'] ?? '',
+    $job['department'] ?? '',
+    $first_name,
+    $middle_name,
+    $last_name,
+    $sanitize($_POST['phone'] ?? ''),
+    $sanitize($_POST['dob'] ?? ''),
+    $sanitize($_POST['pob'] ?? ''),
+    $sanitize($_POST['gender'] ?? ''),
+    $sanitize($_POST['nationality'] ?? ''),
+    $sanitize($_POST['marital_status'] ?? ''),
+    intval($_POST['children'] ?? 0),
+    $sanitize($_POST['permanent_address'] ?? ''),
+    $sanitize($_POST['state'] ?? ''),
+    $sanitize($_POST['home_town'] ?? ''),
+    $sanitize($_POST['lga'] ?? ''),
+    $sanitize($_POST['academic_qualification'] ?? ''),
+    $sanitize($_POST['academic_qualification_other'] ?? ''),
+    $sanitize($_POST['professional_body'] ?? ''),
+    intval($_POST['publications'] ?? 0),
+    intval($_POST['experience'] ?? 0),
+    $sanitize($_POST['cover_letter'] ?? ''),
+    $cv_path,
+    $passport_path,
+    json_encode($academic_records),
+    json_encode($custom_requirements_responses),
+    $internal_status,
+    $public_status,
+    $reason,
+    round($qual_similarity, 2),
+    round($body_similarity, 2),
+    0
+]);
+
+
+if ($saved !== false) {
+
+    // 🔑 Get the newly inserted application ID
+    $applicationId = $pdo->lastInsertId();
+
+    // ================= SAVE REFEREES =================
+    $refStmt = $pdo->prepare("
+        INSERT INTO referees (application_id, name, occupation, email, phone)
+        VALUES (?, ?, ?, ?, ?)
+    ");
+
+    foreach ($referees as $ref) {
+        if (!empty($ref['name'])) {
+            $refStmt->execute([
+                $applicationId,
+                $ref['name'],
+                $ref['occupation'],
+                $ref['email'],
+                $ref['phone']
+            ]);
         }
-
-        // Redirect to dashboard with success and applicant number so it can be shown immediately
-        header("Location: applicant_dashboard.php?success=1&applicant_number=" . urlencode($applicant_number));
-        exit();
-    } else {
-        $error = "Unable to save your application at the moment. Please try again later.";
     }
+
+    // ================= SEND EMAIL =================
+    if (function_exists('sendApplicantMail')) {
+        $toEmail = $email;
+        $toName = trim($first_name . ' ' . $last_name);
+        $jobPosition = $job['position'] ?? 'Job Application';
+
+        try {
+            sendApplicantMail($toEmail, $toName, $jobPosition);
+        } catch (\Throwable $e) {
+            @file_put_contents(
+                __DIR__ . '/email_errors.log',
+                date('c') . " - sendApplicantMail error: " . $e->getMessage() . PHP_EOL,
+                FILE_APPEND
+            );
+        }
+    }
+
+    // ================= REDIRECT =================
+    header(
+        "Location: applicant_dashboard.php?success=1&applicant_number=" .
+        urlencode($applicant_number)
+    );
+    exit();
+} else {
+    $error = "Unable to save your application at the moment. Please try again later.";
 }
 
+
 // ----------------- Render form -----------------
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -473,7 +565,9 @@ if (file_exists(__DIR__ . '/header.php')) include __DIR__ . '/header.php';
 <div class="container">
   <h2>Application for <?= htmlspecialchars($job['position']) ?></h2>
   <p><strong>Department:</strong> <?= htmlspecialchars($job['department'] ?? '') ?></p>
-  <p><strong>Minimum Qualification Required:</strong> <?= htmlspecialchars($job['qualification'] ?? '') ?></p>
+  <p><strong>Minimum Qualification Required:</strong> 
+<?= htmlspecialchars($job['requirement_qualification'] ?? '') ?></p>
+
 
   <?php if (!empty($error)): ?>
     <div class="error"><?= htmlspecialchars($error) ?></div>
@@ -689,7 +783,7 @@ style="
 
 </div>
 
-            <label>Upload Certificate (optional)</label>
+            <label>Upload Certificate </label>
             <input type="file" name="institution_certificate[]" accept=".pdf,.jpg,.jpeg,.png">
 
             <button type="button" class="remove-acad" onclick="this.closest('.academic-record').remove()" style="display:none">Remove</button>
@@ -703,23 +797,37 @@ style="
 
       <!-- Custom Requirements (text + optional file per requirement) -->
       <?php
-        $custom_fields = $job['custom_fields'] ?? [];
-        if (!empty($custom_fields)): ?>
-          <fieldset>
-            <legend>Additional Requirements</legend>
-            <p class="small">For each requirement below you may provide a short text response and/or upload a supporting file.</p>
+$custom_fields = [];
 
-            <?php foreach ($custom_fields as $i => $label): ?>
-              <div style="margin-bottom:12px;">
-                <label><strong><?= htmlspecialchars($label) ?></strong></label>
-                <div class="custom-row">
-                  <input type="text" name="custom_text[]" placeholder="Your response">
-                  <input type="file" name="custom_file[]" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-                </div>
-              </div>
-            <?php endforeach; ?>
-          </fieldset>
-      <?php endif; ?>
+if (!empty($job['custom_fields'])) {
+    if (is_string($job['custom_fields'])) {
+        $decoded = json_decode($job['custom_fields'], true);
+        $custom_fields = is_array($decoded) ? $decoded : [];
+    } elseif (is_array($job['custom_fields'])) {
+        $custom_fields = $job['custom_fields'];
+    }
+}
+
+if (!empty($custom_fields)):
+?>
+  <fieldset>
+    <legend>Additional Requirements</legend>
+    <p class="small">
+      For each requirement below you may provide a short text response
+      and/or upload a supporting file.
+    </p>
+
+    <?php foreach ($custom_fields as $i => $label): ?>
+      <div style="margin-bottom:12px;">
+        <label><strong><?= htmlspecialchars($label) ?></strong></label>
+        <div class="custom-row">
+          <input type="text" name="custom_text[]" placeholder="Your response">
+          <input type="file" name="custom_file[]" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+        </div>
+      </div>
+    <?php endforeach; ?>
+  </fieldset>
+<?php endif; ?>
 
       <!-- Referees -->
       <fieldset>
@@ -788,6 +896,19 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         container.appendChild(block);
     });
+const qualSelect = document.getElementById('academic_qualification');
+const otherField = document.getElementById('academic_qualification_other');
+
+qualSelect.addEventListener('change', function () {
+    if (this.value === 'Other') {
+        otherField.style.display = 'block';
+        otherField.required = true;
+    } else {
+        otherField.style.display = 'none';
+        otherField.required = false;
+        otherField.value = '';
+    }
+});
 
     form.addEventListener('submit', function(e) {
         e.preventDefault(); // prevent default submission
@@ -816,17 +937,6 @@ document.addEventListener('DOMContentLoaded', function() {
             alert("Please fill in all required fields:\n" + missingFields.join(", "));
             return;
         }
-document.getElementById('academic_qualification').addEventListener('change', function () {
-    const otherField = document.getElementById('academic_qualification_other');
-    if (this.value === 'Other') {
-        otherField.style.display = 'block';
-        otherField.required = true;
-    } else {
-        otherField.style.display = 'none';
-        otherField.required = false;
-        otherField.value = "";
-    }
-});
         // Confirm submission
         const confirmSubmit = confirm(
             "Are you sure you want to submit your application?\n" +

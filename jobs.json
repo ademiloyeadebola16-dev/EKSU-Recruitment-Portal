@@ -16,7 +16,7 @@
             "Number of Citation"
         ],
         "deadline": "2025-12-31T23:59",
-        "is_active": true,
+        "is_active": false,
         "job_category": "Non-Academic",
         "qualification_display": "M.Sc"
     },

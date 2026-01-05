@@ -1,5 +1,7 @@
 <?php
 session_start();
+require 'db.php';
+
 if (!isset($_SESSION['admin'])) {
     header("Location: index.php");
     exit();
@@ -10,14 +12,34 @@ if ($index === null) {
     die("Invalid request.");
 }
 
-$applications_file = 'applications.json';
-$applications = file_exists($applications_file) ? json_decode(file_get_contents($applications_file), true) : [];
+$stmt = $pdo->prepare("SELECT * FROM applications WHERE id = ? LIMIT 1");
+$stmt->execute([$index]);
+$app = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if (!isset($applications[$index])) {
+if (!$app) {
     die("Application not found.");
 }
+// ================= FETCH REFEREES FROM DB =================
+$refStmt = $pdo->prepare("
+    SELECT name, occupation, email, phone
+    FROM referees
+    WHERE application_id = ?
+    ORDER BY id ASC
+");
+$refStmt->execute([$app['id']]);
+$referees = $refStmt->fetchAll(PDO::FETCH_ASSOC);
+$academic_records = [];
 
-$app = $applications[$index];
+if (!empty($app['academic_records'])) {
+    if (is_string($app['academic_records'])) {
+        $decoded = json_decode($app['academic_records'], true);
+        $academic_records = is_array($decoded) ? $decoded : [];
+    } elseif (is_array($app['academic_records'])) {
+        $academic_records = $app['academic_records'];
+    }
+}
+
+
 $applicantId = $app['applicant_number'] ?? 'N/A';
 
 // Build full name
@@ -50,6 +72,14 @@ if (!empty($requirements) && isset($app['job_title'])) {
 
 $qualification_match = round($qualification_match, 1);
 $professional_match = round($professional_match, 1);
+$academic_records = [];
+
+if (!empty($app['academic_records'])) {
+    $decoded = json_decode($app['academic_records'], true);
+    if (is_array($decoded)) {
+        $academic_records = $decoded;
+    }
+}
 
 ?>
 <!DOCTYPE html>
@@ -234,12 +264,16 @@ a.button:hover { background: #006400; }
     </p>
 
     <form method="post" action="toggle_status_visibility.php">
-        <input type="hidden" name="index" value="<?= $index ?>">
-        <input type="hidden" name="action" value="<?= $status_visible ? 'hide' : 'show' ?>">
-        <button type="submit" class="print-btn" style="background:#800000;">
-            <?= $status_visible ? "Hide Status" : "Show Status to Applicant" ?>
-        </button>
-    </form>
+    <input type="hidden" name="index" value="<?= (int)$index ?>">
+
+    <input type="hidden" name="action"
+        value="<?= $status_visible ? 'hide' : 'show' ?>">
+
+    <button type="submit" class="print-btn" style="background:#800000;">
+        <?= $status_visible ? "Hide Status" : "Show Status to Applicant" ?>
+    </button>
+</form>
+
 
     <!-- PERSONAL INFORMATION -->
     <h3 class="section-title">Personal Information</h3>
@@ -251,17 +285,17 @@ a.button:hover { background: #006400; }
     <p><strong>Place of Birth:</strong> <?= htmlspecialchars($app['pob'] ?? '') ?></p>
     <p><strong>Gender:</strong> <?= htmlspecialchars($app['gender'] ?? '') ?></p>
     <p><strong>Nationality:</strong> <?= htmlspecialchars($app['nationality'] ?? '') ?></p>
-    <p><strong>Permanent Address:</strong> <?= htmlspecialchars($app['address'] ?? '') ?></p>
+    <p><strong>Permanent Address:</strong> <?= htmlspecialchars($app['permanent_address'] ?? '') ?></p>
     <p><strong>State:</strong> <?= htmlspecialchars($app['state'] ?? '') ?></p>
     <p><strong>LGA:</strong> <?= htmlspecialchars($app['lga'] ?? '') ?></p>
-    <p><strong>Home Town:</strong> <?= htmlspecialchars($app['hometown'] ?? '') ?></p>
+    <p><strong>Home Town:</strong> <?= htmlspecialchars($app['home_town'] ?? '') ?></p>
     <p><strong>Marital Status:</strong> <?= htmlspecialchars($app['marital_status'] ?? '') ?></p>
     <p><strong>Number of Children:</strong> <?= htmlspecialchars($app['children'] ?? '') ?></p>
 
     <!-- QUALIFICATION -->
     <h3 class="section-title">Qualification Information</h3>
 
-    <p><strong>Academic Qualification:</strong> <?= htmlspecialchars($app['qualification'] ?? '') ?></p>
+    <p><strong>Academic Qualification:</strong> <?= htmlspecialchars($app['academic_qualification'] ?? '') ?></p>
     <p><strong>Professional Body:</strong> <?= htmlspecialchars($app['professional_body'] ?? '') ?></p>
     <p><strong>Years of Experience:</strong> <?= htmlspecialchars($app['experience_years'] ?? '') ?></p>
     <p><strong>Number of Publications:</strong> <?= htmlspecialchars($app['publications'] ?? '') ?></p>
@@ -281,33 +315,85 @@ a.button:hover { background: #006400; }
         <p><strong>Professional Body Match:</strong> <?= $professional_match ?>%</p>
     </div>
 
-    <!-- REFEREES -->
     <h3 class="section-title">Referees</h3>
 
-    <?php if (!empty($app['referees'])): ?>
-        <?php foreach ($app['referees'] as $i => $ref): ?>
-            <p>
-                <strong>Referee <?= $i + 1 ?>:</strong>
-                <?= htmlspecialchars($ref['name'] ?? '') ?> —
-                <?= htmlspecialchars($ref['occupation'] ?? '') ?> —
-                <?= htmlspecialchars($ref['email'] ?? '') ?> —
-                <?= htmlspecialchars($ref['phone'] ?? '') ?>
-            </p>
-        <?php endforeach; ?>
-    <?php else: ?>
-        <p>No referees provided.</p>
-    <?php endif; ?>
+<?php if (!empty($referees)): ?>
+    <table width="100%" cellpadding="8" cellspacing="0" border="1">
+        <thead style="background:#f5f5f5">
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Occupation</th>
+                <th>Email</th>
+                <th>Phone</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($referees as $i => $ref): ?>
+                <tr>
+                    <td><?= $i + 1 ?></td>
+                    <td><?= htmlspecialchars($ref['name']) ?></td>
+                    <td><?= htmlspecialchars($ref['occupation']) ?></td>
+                    <td><?= htmlspecialchars($ref['email']) ?></td>
+                    <td><?= htmlspecialchars($ref['phone']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+<?php else: ?>
+    <p style="color:#777;">No referees provided.</p>
+<?php endif; ?>
+
 
     <!-- CV -->
     <?php if (!empty($app['cv'])): ?>
         <p><strong>CV:</strong> <a href="<?= htmlspecialchars($app['cv']) ?>" target="_blank">View CV</a></p>
     <?php endif; ?>
+        <h3 class="section-title">Academic Records</h3>
 
-    <button class="print-btn" onclick="window.print()">Print</button>
+<?php if (!empty($academic_records)): ?>
+    <table width="100%" cellpadding="8" cellspacing="0" border="1">
+        <thead style="background:#f5f5f5">
+            <tr>
+                <th>#</th>
+                <th>Institution</th>
+                <th>Qualification</th>
+                <th>Period</th>
+                <th>Certificate</th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($academic_records as $i => $rec): ?>
+            <tr>
+                <td><?= $i + 1 ?></td>
+                <td><?= htmlspecialchars($rec['institution'] ?? '') ?></td>
+                <td><?= htmlspecialchars($rec['qualification'] ?? '') ?></td>
+                <td>
+                    <?= htmlspecialchars(($rec['from'] ?? '') . ' - ' . ($rec['to'] ?? '')) ?>
+                </td>
+                <td>
+                    <?php if (!empty($rec['certificate'])): ?>
+                        📄 <a href="<?= htmlspecialchars($rec['certificate']) ?>" target="_blank">
+                            View Certificate
+                        </a>
+                    <?php else: ?>
+                        <span style="color:#777;">Not uploaded</span>
+                    <?php endif; ?>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+<?php else: ?>
+    <p style="color:#777;">No academic records uploaded.</p>
+<?php endif; ?>
+
+
+
 </div>
 
 <footer style="background:#800000; color:white; text-align:center; padding:15px; margin-top:40px;">
-    &copy; 2025 EKSU Recruitment. All rights reserved.
+    &copy; 2026 EKSU Recruitment. All rights reserved.
 </footer>
 
 </body>

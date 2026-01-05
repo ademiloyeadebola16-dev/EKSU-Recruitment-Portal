@@ -1,76 +1,113 @@
 <?php
-// export_pdf_filtered.php
-require_once __DIR__ . '/vendor/autoload.php'; // TCPDF via Composer
+// export_pdf_filtered.php (DB VERSION)
+require_once __DIR__ . '/vendor/autoload.php'; // TCPDF
+require_once __DIR__ . '/db.php';
+
 session_start();
 if (!isset($_SESSION['admin'])) {
     header('HTTP/1.1 403 Forbidden');
     exit('Forbidden');
 }
 
-$applications_file = __DIR__ . '/applications.json';
-$applications = file_exists($applications_file)
-    ? json_decode(file_get_contents($applications_file), true)
-    : [];
-
+/* ============================================================
+   1) SELECTED ROWS (POST → application IDs)
+   ============================================================ */
 $selected = [];
 
-/* ============================================================
-   1) Preferred – selected table rows via POST (JSON array)
-   ============================================================ */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['rows'])) {
-    $indices = json_decode($_POST['rows'], true);
-    if (is_array($indices)) {
-        foreach ($indices as $idx) {
-            if (isset($applications[intval($idx)])) {
-                $selected[] = $applications[intval($idx)];
-            }
-        }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['rows'])) {
+    $ids = json_decode($_POST['rows'], true);
+
+    if (is_array($ids) && count($ids)) {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $sql = "
+            SELECT 
+                a.id,
+                a.first_name,
+                a.middle_name,
+                a.last_name,
+                a.email,
+                a.status,
+                a.reason,
+                a.created_at,
+                j.position AS job_title
+            FROM applications a
+            LEFT JOIN jobs j ON j.id = a.job_id
+            WHERE a.id IN ($placeholders)
+            ORDER BY a.created_at DESC
+        ";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($ids);
+        $selected = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
 
 /* ============================================================
-   2) Fallback – filtering via GET
+   2) FILTERING VIA GET (fallback)
    ============================================================ */
 if (empty($selected)) {
-    $search = strtolower(trim($_GET['search'] ?? ''));
-    $statusFilter = strtolower(trim($_GET['status'] ?? ''));
-    $jobFilter = strtolower(trim($_GET['job'] ?? ''));
 
-    foreach ($applications as $app) {
-        $fullName = trim(($app['first_name'] ?? '') . ' ' . ($app['middle_name'] ?? '') . ' ' . ($app['last_name'] ?? ''));
-        $email = strtolower($app['email'] ?? '');
-        $job = strtolower($app['job_title'] ?? '');
-        $status = strtolower($app['status'] ?? 'Pending');
+    $search = trim($_GET['search'] ?? '');
+    $status = trim($_GET['status'] ?? '');
+    $job    = trim($_GET['job'] ?? '');
 
-        $match = true;
+    $conditions = [];
+    $params = [];
 
-        if ($search) {
-            if (
-                strpos(strtolower($fullName), $search) === false &&
-                strpos($email, $search) === false &&
-                strpos($job, $search) === false
-            ) {
-                $match = false;
-            }
-        }
-
-        if ($statusFilter && $statusFilter !== $status) $match = false;
-        if ($jobFilter && $jobFilter !== $job) $match = false;
-
-        if ($match) $selected[] = $app;
+    if ($search !== '') {
+        $conditions[] = "
+            (a.first_name LIKE ? OR 
+             a.middle_name LIKE ? OR 
+             a.last_name LIKE ? OR 
+             a.email LIKE ? OR 
+             j.position LIKE ?)
+        ";
+        $params = array_merge($params, array_fill(0, 5, "%$search%"));
     }
+
+    if ($status !== '') {
+        $conditions[] = "a.status = ?";
+        $params[] = $status;
+    }
+
+    if ($job !== '') {
+        $conditions[] = "j.position = ?";
+        $params[] = $job;
+    }
+
+    $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+    $sql = "
+        SELECT 
+            a.id,
+            a.first_name,
+            a.middle_name,
+            a.last_name,
+            a.email,
+            a.status,
+            a.reason,
+            a.created_at,
+            j.position AS job_title
+        FROM applications a
+        LEFT JOIN jobs j ON j.id = a.job_id
+        $where
+        ORDER BY a.created_at DESC
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $selected = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-if (empty($selected)) $selected = $applications;
-
 /* ============================================================
-   Create PDF with Logo + Footer + Styling
+   PDF CLASS
    ============================================================ */
 class CustomPDF extends TCPDF {
     public function Header() {
-        $image = __DIR__ . '/logo.png';
-        if (file_exists($image)) {
-            $this->Image($image, 10, 5, 25);
+        $logo = __DIR__ . '/logo.png';
+        if (file_exists($logo)) {
+            $this->Image($logo, 10, 5, 25);
         }
         $this->SetFont('helvetica', 'B', 16);
         $this->Cell(0, 12, 'EKITI STATE UNIVERSITY - RECRUITMENT PORTAL', 0, 1, 'C');
@@ -82,19 +119,30 @@ class CustomPDF extends TCPDF {
     public function Footer() {
         $this->SetY(-15);
         $this->SetFont('helvetica', 'I', 8);
-        $this->Cell(0, 10, 'Generated on: ' . date('d M Y - h:i A') . ' | Page ' . $this->getAliasNumPage() . '/' . $this->getAliasNbPages(), 0, 0, 'C');
+        $this->Cell(
+            0,
+            10,
+            'Generated on: ' . date('d M Y - h:i A') .
+            ' | Page ' . $this->getAliasNumPage() . '/' . $this->getAliasNbPages(),
+            0,
+            0,
+            'C'
+        );
     }
 }
 
+/* ============================================================
+   PDF SETUP
+   ============================================================ */
 $pdf = new CustomPDF('L', PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
 $pdf->SetMargins(10, 30, 10);
-$pdf->SetAutoPageBreak(TRUE, 18);
+$pdf->SetAutoPageBreak(true, 18);
 $pdf->AddPage();
 
 /* ============================================================
-   Build Table (FINAL 7 COLUMNS)
+   TABLE
    ============================================================ */
-$tbl  = '
+$tbl = '
 <style>
 table { border-collapse: collapse; width: 100%; }
 th { background-color:#800000; color:#fff; font-weight:bold; text-align:center; }
@@ -113,29 +161,28 @@ td { vertical-align:middle; }
     <th width="15%">Date</th>
 </tr>
 </thead>
-<tbody>
-';
+<tbody>';
 
 foreach ($selected as $i => $app) {
-    $fullName = trim(($app['first_name'] ?? '') . ' ' . ($app['middle_name'] ?? '') . ' ' . ($app['last_name'] ?? ''));
-    $email = $app['email'] ?? '';
-    $job   = $app['job_title'] ?? '';
-    $status = ucfirst(strtolower($app['status'] ?? 'Pending'));
-    $remarks = strip_tags($app['reason'] ?? '');
-    $date = $app['date'] ?? '';
 
-    // row background color
-    $bg = ($i % 2 == 0) ? 'background-color:#f7f7f7;' : 'background-color:#ffffff;';
+    $fullName = trim(
+        ($app['first_name'] ?? '') . ' ' .
+        ($app['middle_name'] ?? '') . ' ' .
+        ($app['last_name'] ?? '')
+    );
+
+    $status = ucfirst(strtolower($app['status'] ?? 'Pending'));
+    $bg = ($i % 2 === 0) ? 'background-color:#f7f7f7;' : 'background-color:#ffffff;';
 
     $tbl .= "
     <tr style='{$bg}'>
         <td style='text-align:center;'>" . ($i + 1) . "</td>
         <td>" . htmlspecialchars($fullName) . "</td>
-        <td>" . htmlspecialchars($email) . "</td>
-        <td>" . htmlspecialchars($job) . "</td>
+        <td>" . htmlspecialchars($app['email'] ?? '') . "</td>
+        <td>" . htmlspecialchars($app['job_title'] ?? '') . "</td>
         <td style='text-align:center;'>" . htmlspecialchars($status) . "</td>
-        <td>" . htmlspecialchars($remarks) . "</td>
-        <td style='text-align:center;'>" . htmlspecialchars($date) . "</td>
+        <td>" . htmlspecialchars(strip_tags($app['reason'] ?? '')) . "</td>
+        <td style='text-align:center;'>" . htmlspecialchars($app['created_at'] ?? '') . "</td>
     </tr>";
 }
 

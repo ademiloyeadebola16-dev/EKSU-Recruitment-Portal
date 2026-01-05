@@ -1,14 +1,23 @@
 <?php
 function isJobOpen(array $job): bool
 {
-    // Inactive job
-    if (isset($job['is_active']) && $job['is_active'] === false) {
-        return false;
+    /* ===============================
+       JOB ACTIVE FLAG
+       =============================== */
+    if (isset($job['is_active'])) {
+        // MySQL may return 0/1 or '0'/'1'
+        if ((int)$job['is_active'] !== 1) {
+            return false;
+        }
     }
 
-    // Deadline passed
-    if (!empty($job['deadline']) && strtotime($job['deadline']) < time()) {
-        return false;
+    /* ===============================
+       DEADLINE CHECK
+       =============================== */
+    if (!empty($job['deadline'])) {
+        if (strtotime($job['deadline']) < time()) {
+            return false;
+        }
     }
 
     return true;

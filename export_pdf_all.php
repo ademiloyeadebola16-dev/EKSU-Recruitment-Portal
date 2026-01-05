@@ -1,25 +1,44 @@
 <?php
-// export_pdf_all.php
-require_once __DIR__ . '/vendor/autoload.php'; // Composer autoload (TCPDF)
+// export_pdf_all.php (DB VERSION)
+require_once __DIR__ . '/vendor/autoload.php'; // TCPDF
+require_once __DIR__ . '/db.php';
+
 session_start();
 if (!isset($_SESSION['admin'])) {
     header('HTTP/1.1 403 Forbidden');
     exit('Forbidden');
 }
 
-$applications_file = __DIR__ . '/applications.json';
-$applications = file_exists($applications_file) ? json_decode(file_get_contents($applications_file), true) : [];
+/* ------------------ FETCH DATA FROM DB ------------------ */
+$sql = "
+    SELECT 
+        a.first_name,
+        a.middle_name,
+        a.last_name,
+        a.email,
+        a.status,
+        a.internal_status,
+        a.reason,
+        a.created_at,
+        j.position AS job_title
+    FROM applications a
+    LEFT JOIN jobs j ON j.id = a.job_id
+    ORDER BY a.created_at DESC
+";
 
-// create new PDF
+$stmt = $pdo->query($sql);
+$applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/* ------------------ CREATE PDF ------------------ */
 $pdf = new \TCPDF('L', PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
 $pdf->SetCreator('EKSU Recruitment');
 $pdf->SetAuthor('EKSU Recruitment');
 $pdf->SetTitle('All Applicants');
 $pdf->SetMargins(10, 10, 10);
-$pdf->SetAutoPageBreak(TRUE, 10);
+$pdf->SetAutoPageBreak(true, 10);
 $pdf->AddPage();
 
-// Build HTML table with strict 100% column widths
+/* ------------------ BUILD TABLE ------------------ */
 $tbl  = '<h2 style="text-align:center;">All Applicants</h2>';
 $tbl .= '<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse; width:100%;">';
 
@@ -40,14 +59,17 @@ $tbl .= '
 
 foreach ($applications as $i => $app) {
 
-    $fullName = trim(($app['first_name'] ?? '') . ' ' . ($app['middle_name'] ?? '') . ' ' . ($app['last_name'] ?? ''));
-    $email = $app['email'] ?? '';
-    $job = $app['job_title'] ?? '';
+    $fullName = trim(
+        ($app['first_name'] ?? '') . ' ' .
+        ($app['middle_name'] ?? '') . ' ' .
+        ($app['last_name'] ?? '')
+    );
+
     $status = ucfirst(strtolower($app['status'] ?? 'Pending'));
     $internal = $app['internal_status'] ?? '';
     $reason = strip_tags($app['reason'] ?? '');
 
-    // Row background coloring
+    /* ---------- ROW COLOR ---------- */
     if (strtolower($status) === 'qualified') {
         $bg = ' style="background-color:#e6ffea;"';
     } elseif (strtolower($status) === 'not qualified') {
@@ -58,16 +80,15 @@ foreach ($applications as $i => $app) {
         $bg = ' style="background-color:#f2f2f2;"';
     }
 
-    // Each <td> width matches <th>
     $tbl .= "<tr{$bg} style='vertical-align:middle;'>
         <td width='15%' style='text-align:center;'>" . ($i + 1) . "</td>
         <td width='14%' style='text-align:left;'>" . htmlspecialchars($fullName) . "</td>
-        <td width='14%' style='text-align:left;'>" . htmlspecialchars($email) . "</td>
-        <td width='14%' style='text-align:left;'>" . htmlspecialchars($job) . "</td>
+        <td width='14%' style='text-align:left;'>" . htmlspecialchars($app['email'] ?? '') . "</td>
+        <td width='14%' style='text-align:left;'>" . htmlspecialchars($app['job_title'] ?? '') . "</td>
         <td width='14%' style='text-align:center;'>" . htmlspecialchars($status) . "</td>
         <td width='14%' style='text-align:center;'>" . htmlspecialchars($internal) . "</td>
         <td width='14%' style='text-align:left;'>" . htmlspecialchars($reason) . "</td>
-        <td width='15%' style='text-align:center;'>" . htmlspecialchars($app['date'] ?? '') . "</td>
+        <td width='15%' style='text-align:center;'>" . htmlspecialchars($app['created_at'] ?? '') . "</td>
     </tr>";
 }
 

@@ -1,15 +1,38 @@
 <?php
 session_start();
-
-$applications_file = "applications.json";
-$applications = file_exists($applications_file) ? json_decode(file_get_contents($applications_file), true) : [];
+require_once 'db.php';
 
 $id = $_GET['id'] ?? null;
-if ($id === null || !isset($applications[$id])) {
+if (!$id || !is_numeric($id)) {
     die("Invalid application reference.");
 }
 
-$app = $applications[$id];
+/* =========================================================
+   Fetch application
+   ========================================================= */
+$stmt = $pdo->prepare("
+    SELECT *
+    FROM applications
+    WHERE id = ?
+    LIMIT 1
+");
+$stmt->execute([$id]);
+$app = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$app) {
+    die("Invalid application reference.");
+}
+
+/* =========================================================
+   Fetch custom fields (JSON → SQL replacement)
+   ========================================================= */
+$stmt = $pdo->prepare("
+    SELECT label, text, file
+    FROM application_custom_fields
+    WHERE application_id = ?
+");
+$stmt->execute([$id]);
+$custom_fields = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html>
@@ -75,7 +98,9 @@ h1 {
 
     <div class="section">
         <h3>Personal Information</h3>
-        <div class="row"><span class="label">Full Name:</span> <?= htmlspecialchars($app['first_name']." ".$app['middle_name']." ".$app['last_name']) ?></div>
+        <div class="row"><span class="label">Full Name:</span>
+            <?= htmlspecialchars(trim($app['first_name'].' '.$app['middle_name'].' '.$app['last_name'])) ?>
+        </div>
         <div class="row"><span class="label">Email:</span> <?= htmlspecialchars($app['email']) ?></div>
         <div class="row"><span class="label">Phone:</span> <?= htmlspecialchars($app['phone']) ?></div>
     </div>
@@ -88,16 +113,21 @@ h1 {
         <div class="row"><span class="label">Date:</span> <?= htmlspecialchars($app['date']) ?></div>
     </div>
 
-    <?php if (!empty($app['custom_fields'])): ?>
+    <?php if (!empty($custom_fields)): ?>
     <div class="section">
         <h3>Additional Requirements</h3>
 
-        <?php foreach ($app['custom_fields'] as $entry): ?>
+        <?php foreach ($custom_fields as $entry): ?>
             <div class="row">
                 <span class="label"><?= htmlspecialchars($entry['label']) ?>:</span><br>
-                <strong>Response:</strong> <?= htmlspecialchars($entry['text'] ?: "No text provided") ?><br>
+                <strong>Response:</strong>
+                <?= htmlspecialchars($entry['text'] ?: "No text provided") ?><br>
+
                 <?php if (!empty($entry['file'])): ?>
-                    <strong>File:</strong> <a href="uploads/<?= htmlspecialchars($entry['file']) ?>" target="_blank">View Attachment</a>
+                    <strong>File:</strong>
+                    <a href="uploads/<?= htmlspecialchars($entry['file']) ?>" target="_blank">
+                        View Attachment
+                    </a>
                 <?php else: ?>
                     <strong>File:</strong> None uploaded
                 <?php endif; ?>

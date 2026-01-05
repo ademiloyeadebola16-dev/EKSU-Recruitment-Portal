@@ -1,77 +1,54 @@
 <?php
 session_start();
+require 'db.php';
 
 // Load job list
-$jobs_file = 'jobs.json';
-$jobs = file_exists($jobs_file) ? json_decode(file_get_contents($jobs_file), true) : [];
-
 // Check if applicant is logged in
 $isApplicant = isset($_SESSION['applicant_email']);
-function load_jobs_json($file) {
-    if (!file_exists($file)) {
-        file_put_contents($file, "[]"); // Create empty array
-    }
 
-    $raw = file_get_contents($file);
-    $data = json_decode($raw, true);
+// Handle search
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
 
-    // If invalid JSON, repair it
-    if (!is_array($data)) {
-        $data = [$data]; // turn single job into array
-    }
+// Base SQL
+$sql = "
+    SELECT
+        id,
+        category,
+        title,
+        faculty,
+        department,
+        position,
+        requirement_qualification,
+        deadline,
+        is_active,
+        created_at
+    FROM jobs
+    WHERE (is_active = 1 OR is_active IS NULL)
+      AND (deadline IS NULL OR deadline >= CURDATE())
+";
 
-    // If it's empty or null, fix it
-    if ($data === null || $data === "" || $data === false) {
-        $data = [];
-    }
+$params = [];
 
-    // Enforce array type
-    if (!is_array($data)) {
-        $data = [$data];
-    }
+// Search filter
+if ($search !== '') {
+    $sql .= " AND (
+        category LIKE ?
+        OR faculty LIKE ?
+        OR department LIKE ?
+        OR position LIKE ?
+        OR requirement_qualification LIKE ?
+    )";
 
-    // Rewrite clean, safe JSON
-    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
-
-    return $data;
+    $like = "%$search%";
+    $params = [$like, $like, $like, $like, $like];
 }
 
-// Handle search query
-$search = isset($_GET['search']) ? strtolower(trim($_GET['search'])) : '';
-if (!empty($search)) {
-    $jobs = array_filter($jobs, function ($job) use ($search) {
-    return str_contains(strtolower($job['category'] ?? ''), $search)
-        || str_contains(strtolower($job['title'] ?? ''), $search)
-        || str_contains(strtolower($job['faculty'] ?? ''), $search)
-        || str_contains(strtolower($job['department'] ?? ''), $search)
-        || str_contains(strtolower($job['position'] ?? ''), $search)
-        || str_contains(strtolower($job['qualification'] ?? ''), $search);
-});
+$sql .= " ORDER BY created_at DESC";
 
-    $now = time();
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$jobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$visible_jobs = array_filter($jobs, function ($job) use ($now) {
-    if (isset($job['is_active']) && $job['is_active'] === false) return false;
-   $now = time();
-
-$visible_jobs = array_filter($job, function ($job) use ($now) {
-
-    // Hide ONLY if explicitly inactive
-    if (isset($job['is_active']) && $job['is_active'] === false) {
-        return false;
-    }
-
-    // Hide ONLY if deadline exists and is passed
-    if (!empty($job['deadline']) && strtotime($job['deadline']) < $now) {
-        return false;
-    }
-
-    return true;
-});
-
-});
-
-}
 
 ?>
 <!DOCTYPE html>
@@ -407,7 +384,7 @@ footer {
         <td><?= htmlspecialchars($job['faculty'] ?? 'N/A'); ?></td>
         <td><?= htmlspecialchars($job['department'] ?? 'N/A'); ?></td>
         <td><?= htmlspecialchars($job['position'] ?? 'N/A'); ?></td>
-        <td><?= htmlspecialchars($job['qualification_display'] ?? $job['qualification'] ?? 'N/A'); ?></td>
+        <td><?= htmlspecialchars($job['qualification_display'] ?? $job['requirement_qualification'] ?? 'N/A'); ?></td>
   <td>
     <?php if (!empty($job['is_active'])): ?>
         <span style="color:green;font-weight:bold;">Active</span>
@@ -429,7 +406,7 @@ footer {
     <?php else: ?>
 
         <?php if ($isApplicant): ?>
-            <a href="apply.php?job_id=<?= urlencode($index); ?>" class="apply-btn">
+            <a href="apply.php?job_id=<?= (int)$job['id']; ?>" class="apply-btn">
                 Apply Now
             </a>
         <?php else: ?>
