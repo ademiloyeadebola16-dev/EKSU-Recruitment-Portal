@@ -665,6 +665,8 @@ style="
         <option value="M.Ed">M.Ed</option>
         <option value="MBA">MBA</option>
         <option value="M.Eng">M.Eng</option>
+        <option value="LL.M">LL.M</option>
+        <option value="MPhill">MPhill</option>
         <option value="PhD">PhD</option>
         <option value="Other">Other (specify)</option>
     </select>

@@ -58,7 +58,7 @@ $jobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <title>EKSU Recruitment Portal</title>
 <style>
 body {
-   font-family: 'Times New Roman', Times, serif;
+   font-family: 'Arial', sans-serif;
     background: #f0f4f8;
     margin: 0;
 }
@@ -324,7 +324,7 @@ footer {
       <img src="logo.jfif" alt="Site Logo">
       <div class="nav-text">
         <h1>Ekiti State University, Ado-Ekiti</h1>
-        <h5>Job Recruitment Portal</h5>
+        <h5>Recruitment Portal</h5>
       </div>
     </div>
 
@@ -367,7 +367,7 @@ footer {
 <!-- JOB LISTINGS -->
 <?php if (count($jobs) > 0): ?>
 <table>
-    <h2>Available Job Listing</h2>
+    <h2>Current Vacancies</h2>
     <tr>
         <th>Job Category</th>
         <th>Faculty</th>
@@ -478,7 +478,7 @@ document.querySelectorAll('.countdown').forEach(timer => {
 </script>
 
 <footer>
-    <p>&copy; 2025 EKSU Recruitment. All rights reserved.</p>
+    <p>&copy; 2026 EKSU Recruitment. All rights reserved.</p>
 </footer>
 </body>
 </html>

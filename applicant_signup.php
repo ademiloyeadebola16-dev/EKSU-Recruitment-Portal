@@ -6,6 +6,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $name  = trim($_POST['name']);
     $email = trim($_POST['email']);
+    $confirm_email = trim($_POST['confirm_email']);
+
+if ($email !== $confirm_email) {
+    $error = "Email addresses do not match!";
+}
+
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
 
     // 🔍 Check if email already exists
@@ -103,7 +109,7 @@ nav h1 {
         <img src="logo.jfif" alt="Site Logo">
         <div class="nav-text">
             <h1>Ekiti State University, Ado-Ekiti</h1>
-            <h5>Job Recruitment Portal</h5>
+            <h5>Recruitment Portal</h5>
         </div>
     </div>
     <div>
@@ -124,6 +130,7 @@ nav h1 {
     <form method="POST">
         <input type="text" name="name" placeholder="Full Name" required>
         <input type="email" name="email" placeholder="Email Address" required>
+        <input type="email" name="confirm_email" placeholder="Confirm Email Address" required>
         <input type="password" name="password" placeholder="Password" required>
         <button type="submit">Sign Up</button>
     </form>

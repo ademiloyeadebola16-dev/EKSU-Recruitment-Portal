@@ -385,7 +385,7 @@ th {background:#800000;color:white;}
       <img src="logo.jfif" alt="Site Logo" style="width:70px;height:70px;border-radius:5px;">
       <div>
         <h1 style="margin:0;">Ekiti State University, Ado-Ekiti</h1>
-        <h5 style="margin:0;color:#ddd;">Job Recruitment Portal</h5>
+        <h5 style="margin:0;color:#ddd;">Recruitment Portal</h5>
        <span>Welcome, <?= htmlspecialchars($currentAdmin['email']) ?> 👋</span>
       </div>
    </div>

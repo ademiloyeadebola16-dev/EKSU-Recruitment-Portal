@@ -154,7 +154,7 @@ th {
       <img src="logo.jfif" alt="Site Logo">
       <div class="nav-text">
         <h1>Ekiti State University, Ado-Ekiti</h1>
-        <h5>Job Recruitment Portal</h5>
+        <h5>Recruitment Portal</h5>
       </div>
     </div>
 <a href="admin.php" class="btn" style="background:#008000;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;margin-right:6px;">Home</a>

@@ -70,7 +70,7 @@ footer { background: #800000; color: white; text-align: center; padding: 16px; m
       <img src="logo.jfif" alt="Site Logo">
       <div class="nav-text">
         <h1>Ekiti State University, Ado-Ekiti</h1>
-        <h5>Job Recruitment Portal</h5>
+        <h5>Recruitment Portal</h5>
       </div>
    </div>
 

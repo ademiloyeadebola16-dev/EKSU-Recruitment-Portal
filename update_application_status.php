@@ -18,7 +18,7 @@ $rank = [
     "hnd" => 3,
     "bsc" => 4, "ba" => 4, "bed" => 4, "beng" => 4, "llb" => 4,
     "mbbs" => 5,
-    "msc" => 6, "ma" => 6, "med" => 6, "mba" => 6,
+    "msc" => 6, "ma" => 6, "med" => 6, "mba" => 6, "llm" => 6,
     "mphil" => 7,
     "phd" => 8
 ];

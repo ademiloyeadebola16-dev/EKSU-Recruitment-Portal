@@ -249,6 +249,8 @@ $isExpired = !empty($job['deadline']) && strtotime($job['deadline']) < time();
         <option>M.Ed</option>
         <option>MBA</option>
         <option>M.Eng</option>
+        <option>LL.M</option>
+        <option>MPhill</option>
         <option>PhD</option>
       </select>
     </div>
