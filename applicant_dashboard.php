@@ -62,8 +62,7 @@ th { background:#800000; color:white; }
 .status.UnderReview { color:blue; }
 .status.Qualified { color:green; }
 .status.NotQualified { color:red; }
-.apply-btn { display:inline-block; background:#800000; color:white; padding:10px 20px; border:none; border-radius:5px; text-decoration:none; font-weight:bold; margin-top:15px; }
-.apply-btn:hover { background:#660000; }
+
 
 .profile-card {
     background:#fff;
@@ -84,6 +83,13 @@ th { background:#800000; color:white; }
 }
 .profile-info { font-size:16px; }
 .profile-info b { color:#800000; }
+.draft-card {
+    background: #fff7e6;
+    border: 1px solid #ffd27f;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+}
 </style>
 </head>
 <body>
@@ -153,7 +159,7 @@ th { background:#800000; color:white; }
 
     </table>
 
-    <a href="index.php" class="apply-btn">Apply for Another Job</a>
+   
 
   <?php else: ?>
     <p>You haven’t applied for any jobs yet.</p>

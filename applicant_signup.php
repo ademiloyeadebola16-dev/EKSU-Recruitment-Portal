@@ -4,13 +4,14 @@ require 'db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $name  = trim($_POST['name']);
+    $name  = trim($_POST['name']);   // Full name
     $email = trim($_POST['email']);
     $confirm_email = trim($_POST['confirm_email']);
 
-if ($email !== $confirm_email) {
-    $error = "Email addresses do not match!";
-}
+    if ($email !== $confirm_email) {
+        $error = "Email addresses do not match!";
+        goto render_form; // ⬅️ STOP here safely
+    }
 
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
 
@@ -20,21 +21,22 @@ if ($email !== $confirm_email) {
 
     if ($check->fetch()) {
         $error = "Email already registered!";
-    } else {
-
-        // ✅ Insert new applicant
-        $stmt = $pdo->prepare("
-            INSERT INTO applicants (fullname, email, password)
-            VALUES (?, ?, ?)
-        ");
-
-        $stmt->execute([$name, $email, $password]);
-
-        // Redirect to login (same as JSON version)
-        header("Location: applicant_login.php?success=1");
-        exit();
+        goto render_form; // ⬅️ STOP here safely
     }
+
+    // ✅ Insert new applicant (fullname WILL save correctly)
+    $stmt = $pdo->prepare("
+        INSERT INTO applicants (fullname, email, password)
+        VALUES (?, ?, ?)
+    ");
+
+    $stmt->execute([$name, $email, $password]);
+
+    header("Location: applicant_login.php?success=1");
+    exit();
 }
+
+render_form:
 ?>
 <!DOCTYPE html>
 <html lang="en">

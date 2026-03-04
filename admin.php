@@ -377,25 +377,109 @@ th {background:#800000;color:white;}
 .reject-btn {background:#cc0000;}
 .delete-btn {background:#cc0000;}
 .message {background:#d4edda;color:#155724;padding:10px;border-radius:5px;margin-bottom:20px;}
+nav {
+    background:#800000;
+    color:white;
+    padding:10px 20px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    position:relative;
+}
+
+.nav-left {
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.logo {
+    width:50px;
+    height:50px;
+    border-radius:5px;
+}
+
+.nav-left h1 {
+    margin:0;
+    font-size:20px;
+}
+
+.nav-left h5 {
+    margin:0;
+    font-size:13px;
+    font-weight:normal;
+}
+
+.nav-left span {
+    font-size:13px;
+    display:block;
+    margin-top:3px;
+}
+
+.nav-links {
+    display:none;
+    flex-direction:column;
+    position:absolute;
+    right:20px;
+    top:70px;
+    background:#800000;
+    padding:12px;
+    border-radius:8px;
+    width:200px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.2);
+}
+
+.nav-links a {
+    background:white;
+    color:#800000;
+    padding:8px 12px;
+    border-radius:5px;
+    text-decoration:none;
+    font-weight:bold;
+    margin-bottom:8px;
+    text-align:center;
+}
+
+.nav-links a.logout {
+    background:#cc0000;
+    color:white;
+}
+
+.nav-links.show {
+    display:flex;
+}
+
+.burger {
+    font-size:26px;
+    cursor:pointer;
+    display:block;
+}
 </style>
 </head>
 <body>
 <nav>
-   <div style="display:flex;align-items:center;gap:15px;">
-      <img src="logo.jfif" alt="Site Logo" style="width:70px;height:70px;border-radius:5px;">
+   <div class="nav-left">
+      <img src="logo.jfif" alt="Site Logo" class="logo">
       <div>
-        <h1 style="margin:0;">Ekiti State University, Ado-Ekiti</h1>
-        <h5 style="margin:0;color:#ddd;">Recruitment Portal</h5>
-       <span>Welcome, <?= htmlspecialchars($currentAdmin['email']) ?> 👋</span>
+        <h1>Ekiti State University, Ado-Ekiti</h1>
+        <h5>Recruitment Portal</h5>
+        <span>Welcome, <?= htmlspecialchars($currentAdmin['email']) ?> 👋</span>
       </div>
    </div>
-   <div>
-      <a href="index.php" style="background:white;color:#800000;padding:8px 15px;border-radius:5px;text-decoration:none;font-weight:bold;">Home</a>
-      <a href="add_job.php" style="background:#004080;color:white;padding:8px 15px;border-radius:5px;text-decoration:none;">Add Job</a>
-      <a href="view_applications.php" style="background:#008000;color:white;padding:8px 15px;border-radius:5px;text-decoration:none;">View Applications</a>
-      <a href="admin_logout.php" style="background:#cc0000;color:white;padding:8px 15px;border-radius:5px;text-decoration:none;">Logout</a>
+
+   <!-- Burger Button -->
+   <div class="burger" onclick="toggleMenu()">☰</div>
+
+   <!-- Menu -->
+   <div class="nav-links" id="navLinks">
+      <a href="index.php">Home</a>
+      <a href="add_job.php">Add Job</a>
+      <a href="view_applications.php">View Applications</a>
+      <a href="admin_referees.php">Referee Letters</a>
+      <a href="admin_logout.php" class="logout">Logout</a>
    </div>
 </nav>
+
 
 <div class="container">
 
@@ -602,5 +686,11 @@ $isActive  = (int)$job['is_active'] === 1;
 <?php endif; ?>
 
 </div>
+<script>
+function toggleMenu() {
+    document.getElementById("navLinks").classList.toggle("show");
+}
+</script>
+
 </body>
 </html>

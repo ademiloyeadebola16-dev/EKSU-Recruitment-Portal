@@ -9,7 +9,6 @@ use PHPMailer\PHPMailer\Exception;
 function sendApplicantMail($toEmail, $toName, $jobTitle)
 {
     $mail = new PHPMailer(true);
-
     try {
         // SMTP settings
         $mail->isSMTP();
@@ -17,7 +16,7 @@ function sendApplicantMail($toEmail, $toName, $jobTitle)
         $mail->SMTPAuth   = true;
         $mail->Username   = MAIL_USERNAME;
         $mail->Password   = MAIL_PASSWORD;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
         $mail->Port       = MAIL_PORT;
 
         // Sender

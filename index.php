@@ -312,9 +312,37 @@ td {
 footer {
     background: #800000;
     color: white;
-    text-align: center;
+    text-align: center;   
     padding: 20px;
     margin-top: 40px;
+}
+  /* Subtle link styling */
+footer a {
+color: #ffffff;
+text-decoration: underline;
+transition: opacity 0.3s ease, text-decoration-color 0.3s ease;
+}
+
+
+/* Hover effect */
+footer a:hover {
+opacity: 0.75;
+text-decoration: none;
+}
+
+
+/* Reduce spacing on small screens */
+@media (max-width: 600px) {
+footer {
+padding: 12px 10px;
+margin-top: 25px;
+font-size: 13px;
+}
+
+
+footer p {
+margin: 8px 0;
+}
 }
 </style>
 </head>
@@ -478,7 +506,22 @@ document.querySelectorAll('.countdown').forEach(timer => {
 </script>
 
 <footer>
-    <p>&copy; 2026 EKSU Recruitment. All rights reserved.</p>
+    <p>
+        <strong>Need help?</strong><br>
+        For assistance or enquiries, please contact us on
+        <a href="tel:+2348038558350" style="color:#fff; text-decoration:underline;">
+            +234 803 855 8350
+        </a>
+        or visit our
+        <a href="https://eksu.edu.ng/about-eksu/" style="color:#fff; text-decoration:underline;">
+            About Us
+        </a>
+        page.
+    </p>
+
+    <p>
+        &copy; 2026 EKSU Recruitment. All rights reserved.
+    </p>
 </footer>
 </body>
 </html>

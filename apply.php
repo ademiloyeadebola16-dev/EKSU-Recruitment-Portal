@@ -1,11 +1,12 @@
 <?php
 session_start();
 require 'db.php';
-require_once 'job_guard.php';
+require_once 'job_guard.php'; require_once __DIR__ . '/send_referee_mail.php';
 
 
 
-if (!isset($_SESSION['applicant_email'])) {
+
+if (!isset($_SESSION['applicant_email'])) { 
     header("Location: applicant_login.php");
     exit();
 }
@@ -27,35 +28,7 @@ if (!$job || !isJobOpen($job)) {
 
 
 
-/**
- * Generate applicant number in format:
- * EKSU/APP/YEAR/NNNN
- *
- * Finds the highest existing NNNN for the current year in $applications and returns next.
- */
-function generateApplicantNumber(PDO $pdo) {
-    $year = date('Y');
 
-    $stmt = $pdo->prepare("
-        SELECT applicant_number 
-        FROM applications 
-        WHERE applicant_number LIKE ?
-        ORDER BY id DESC 
-        LIMIT 1
-    ");
-    $stmt->execute(["EKSU/APP/{$year}/%"]);
-    $last = $stmt->fetchColumn();
-
-    $next = 1;
-    if ($last) {
-        $parts = explode('/', $last);
-        if (count($parts) === 4) {
-            $next = intval($parts[3]) + 1;
-        }
-    }
-
-    return "EKSU/APP/{$year}/" . str_pad($next, 4, '0', STR_PAD_LEFT);
-}
 
 /*
   NOTE: We require the mail helper but DO NOT call it until after
@@ -68,17 +41,24 @@ if (file_exists(__DIR__ . '/send_application_mail.php')) {
 }
 
 // Check if applicant already applied for this job (prevent duplicate)
-$stmt = $pdo->prepare("
-    SELECT COUNT(*) 
-    FROM applications 
-    WHERE email = ? AND job_id = ?
-");
-$stmt->execute([$email, $job_id]);
-$has_applied = $stmt->fetchColumn() > 0;
+function hasAppliedBefore(PDO $pdo, $email) {
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM applications 
+        WHERE email = ?
+    ");
+    $stmt->execute([$email]);
+    return $stmt->fetchColumn() > 0;
+}
 
 
 // Handle submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+     $applicant_number = null; // ✅ initialize to prevent undefined warning
+    if (hasAppliedBefore($pdo, $email)) {
+        $error = "You have already applied for a job. Multiple applications are not allowed.";
+    } else {
+
 
     // Basic sanitization helpers
     $sanitize = function($v) {
@@ -90,29 +70,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$has_applied) {
     $middle_name = $sanitize($_POST['middle_name'] ?? '');
     $last_name   = $sanitize($_POST['last_name'] ?? '');
 
-    // --- handle CV upload ---
-    $cv_path = '';
-    if (isset($_FILES['cv']) && is_uploaded_file($_FILES['cv']['tmp_name']) && $_FILES['cv']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = __DIR__ . '/uploads/';
-        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
-        $file_ext = pathinfo($_FILES['cv']['name'], PATHINFO_EXTENSION);
-        $cv_name = 'CV_' . time() . '_' . uniqid() . '.' . preg_replace('/[^a-z0-9.]/i', '', $file_ext);
-        $cv_path = 'uploads/' . $cv_name; // store relative path
-        move_uploaded_file($_FILES['cv']['tmp_name'], __DIR__ . '/' . $cv_path);
+    $is_draft = isset($_POST['is_draft']) ? 1 : 0;
+
+
+
+
+   // --- handle CV upload ---
+$cv_path = '';
+
+if (
+    isset($_FILES['cv']) &&
+    is_uploaded_file($_FILES['cv']['tmp_name']) &&
+    $_FILES['cv']['error'] === UPLOAD_ERR_OK
+) {
+
+    $allowedExt = ['pdf', 'doc', 'docx'];
+    $ext = strtolower(pathinfo($_FILES['cv']['name'], PATHINFO_EXTENSION));
+
+    if (!in_array($ext, $allowedExt)) {
+        die("Invalid CV file type. Only PDF, DOC, and DOCX allowed.");
     }
 
+    $upload_dir = __DIR__ . '/uploads/';
+    if (!file_exists($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
+    }
+
+    $cv_name = 'CV_' . time() . '_' . uniqid() . '.' . $ext;
+    $cv_path = 'uploads/' . $cv_name;
+
+    if (!move_uploaded_file($_FILES['cv']['tmp_name'], __DIR__ . '/' . $cv_path)) {
+        die("CV upload failed.");
+    }
+}
     // --- handle passport upload ---
-    $passport_path = '';
-    if (isset($_FILES['passport']) && is_uploaded_file($_FILES['passport']['tmp_name']) && $_FILES['passport']['error'] === UPLOAD_ERR_OK) {
-        $passport_dir = __DIR__ . '/uploads/passports/';
-        if (!file_exists($passport_dir)) mkdir($passport_dir, 0777, true);
-       $ext = strtolower(pathinfo($_FILES['passport']['name'], PATHINFO_EXTENSION));
-        $safe = 'passport_' . time() . '_' . uniqid() . '.' . preg_replace('/[^a-z0-9.]/i', '', $ext);
-        $passport_rel = 'uploads/passports/' . $safe;
-        move_uploaded_file($_FILES['passport']['tmp_name'], __DIR__ . '/' . $passport_rel);
-        $passport_path = $passport_rel;
+$passport_path = '';
+
+if (isset($_FILES['passport']) && $_FILES['passport']['error'] === UPLOAD_ERR_OK) {
+
+    // Validate MIME type BEFORE moving
+    $allowedImages = ['image/jpeg', 'image/png'];
+    $fileTmp = $_FILES['passport']['tmp_name'];
+    $fileType = mime_content_type($fileTmp);
+
+    if (!in_array($fileType, $allowedImages)) {
+        die("Invalid passport format. Only JPG and PNG allowed.");
     }
 
+    // Validate extension
+    $ext = strtolower(pathinfo($_FILES['passport']['name'], PATHINFO_EXTENSION));
+    $allowedExt = ['jpg', 'jpeg', 'png'];
+
+    if (!in_array($ext, $allowedExt)) {
+        die("Invalid file extension.");
+    }
+
+    // Create upload directory if it doesn't exist
+    $passport_dir = __DIR__ . '/uploads/passports/';
+    if (!file_exists($passport_dir)) {
+        mkdir($passport_dir, 0777, true);
+    }
+
+    // Generate safe filename
+    $safe = 'passport_' . time() . '_' . uniqid() . '.' . $ext;
+    $passport_rel = 'uploads/passports/' . $safe;
+
+    // Move file AFTER validation
+    if (move_uploaded_file($fileTmp, __DIR__ . '/' . $passport_rel)) {
+        $passport_path = $passport_rel;
+    } else {
+        die("Failed to upload passport.");
+    }
+}
     // --- fuzzy matching for academic qualification & professional body (80% threshold) ---
    $job_qual = strtolower(trim($job['requirement_qualification'] ?? ''));
     $applicant_qual = strtolower(trim($_POST['academic_qualification'] ?? ''));
@@ -258,57 +287,21 @@ for ($i = 0; $i < $maxCount; $i++) {
     ];
 }
 
-    // --- Generate applicant number (NEW) ---
-   $applicant_number = generateApplicantNumber($pdo);
 
-    // --- assemble application entry ---
-    $newApplication = [
-        'email' => $email,
-        'job_id' => $job_id,
-        'job_title' => $job['title'] ?? '',
-        'department' => $job['department'] ?? '',
-        'qualification' => $sanitize($_POST['academic_qualification'] ?? ''),
-        'requirement_qualification' => $job['qualification'] ?? '',
-        'academic_qualification' => $sanitize($_POST['academic_qualification'] ?? ''),
-        'academic_qualification_other' => $sanitize($_POST['academic_qualification_other'] ?? ''),
-        'professional_body' => $sanitize($_POST['professional_body'] ?? ''),
-        'cover_letter' => $sanitize($_POST['cover_letter'] ?? ''),
-        'first_name' => $first_name,
-        'middle_name' => $middle_name,
-        'last_name' => $last_name,
-        'phone' => $sanitize($_POST['phone'] ?? ''),
-        'dob' => $sanitize($_POST['dob'] ?? ''),
-        'pob' => $sanitize($_POST['pob'] ?? ''),
-        'gender' => $sanitize($_POST['gender'] ?? ''),
-        'nationality' => $sanitize($_POST['nationality'] ?? ''),
-        'marital_status' => $sanitize($_POST['marital_status'] ?? ''),
-        'children' => intval($_POST['children'] ?? 0),
-        'permanent_address' => $sanitize($_POST['permanent_address'] ?? ''),
-        'state' => $sanitize($_POST['state'] ?? ''),
-        'home_town' => $sanitize($_POST['home_town'] ?? ''),
-        'lga' => $sanitize($_POST['lga'] ?? ''),
-        'publications' => intval($_POST['publications'] ?? 0),
-        'experience_years' => intval($_POST['experience'] ?? 0),
-        'cv' => $cv_path,
-        'passport' => $passport_path,
-        'academic_records' => $academic_records,
-        'internal_status' => $internal_status,
-        'status' => $public_status,
-        'reason' => $reason,
-        'qualification_similarity' => round($qual_similarity, 2),
-        'body_similarity' => round($body_similarity, 2),
-        'custom_requirements' => $custom_requirements_responses,
-        'status_visible' => false,
-        'date' => date('Y-m-d H:i:s'),
-        'applicant_number' => $applicant_number // <-- saved here
-    ];
+   $pdo->beginTransaction();
+
+try {
+
+    /* ===============================
+       1️⃣ INSERT APPLICATION (WITHOUT applicant_number)
+    =============================== */
 
     $stmt = $pdo->prepare("
     INSERT INTO applications (
         applicant_number, email, job_id, job_title, department,
         first_name, middle_name, last_name, phone, dob, pob, gender,
         nationality, marital_status, children, permanent_address,
-        state, home_town, lga,
+        state, home_town, lga, disability,
         academic_qualification, academic_qualification_other,
         professional_body, publications, experience_years,
         cover_letter, cv, passport,
@@ -317,102 +310,142 @@ for ($i = 0; $i < $maxCount; $i++) {
         qualification_similarity, body_similarity,
         status_visible, created_at
     ) VALUES (
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW()
+        NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
     )
-");
+    ");
 
-$saved = $stmt->execute([
-    $applicant_number,
-    $email,
-    $job_id,
-    $job['title'] ?? '',
-    $job['department'] ?? '',
-    $first_name,
-    $middle_name,
-    $last_name,
-    $sanitize($_POST['phone'] ?? ''),
-    $sanitize($_POST['dob'] ?? ''),
-    $sanitize($_POST['pob'] ?? ''),
-    $sanitize($_POST['gender'] ?? ''),
-    $sanitize($_POST['nationality'] ?? ''),
-    $sanitize($_POST['marital_status'] ?? ''),
-    intval($_POST['children'] ?? 0),
-    $sanitize($_POST['permanent_address'] ?? ''),
-    $sanitize($_POST['state'] ?? ''),
-    $sanitize($_POST['home_town'] ?? ''),
-    $sanitize($_POST['lga'] ?? ''),
-    $sanitize($_POST['academic_qualification'] ?? ''),
-    $sanitize($_POST['academic_qualification_other'] ?? ''),
-    $sanitize($_POST['professional_body'] ?? ''),
-    intval($_POST['publications'] ?? 0),
-    intval($_POST['experience'] ?? 0),
-    $sanitize($_POST['cover_letter'] ?? ''),
-    $cv_path,
-    $passport_path,
-    json_encode($academic_records),
-    json_encode($custom_requirements_responses),
-    $internal_status,
-    $public_status,
-    $reason,
-    round($qual_similarity, 2),
-    round($body_similarity, 2),
-    0
-]);
+    $stmt->execute([
+        $email,
+        $job_id,
+        $job['title'] ?? '',
+        $job['department'] ?? '',
+        $first_name,
+        $middle_name,
+        $last_name,
+        $sanitize($_POST['phone'] ?? ''),
+        $sanitize($_POST['dob'] ?? ''),
+        $sanitize($_POST['pob'] ?? ''),
+        $sanitize($_POST['gender'] ?? ''),
+        $sanitize($_POST['nationality'] ?? ''),
+        $sanitize($_POST['marital_status'] ?? ''),
+        intval($_POST['children'] ?? 0),
+        $sanitize($_POST['permanent_address'] ?? ''),
+        $sanitize($_POST['state'] ?? ''),
+        $sanitize($_POST['home_town'] ?? ''),
+        $sanitize($_POST['lga'] ?? ''),
+        $sanitize($_POST['disability'] ?? 'None'),
+        $sanitize($_POST['academic_qualification'] ?? ''),
+        $sanitize($_POST['academic_qualification_other'] ?? ''),
+        $sanitize($_POST['professional_body'] ?? ''),
+        intval($_POST['publications'] ?? 0),
+        intval($_POST['experience'] ?? 0),
+        $sanitize($_POST['cover_letter'] ?? ''),
+        $cv_path,
+        $passport_path,
+        json_encode($academic_records),
+        json_encode($custom_requirements_responses),
+        $internal_status,
+        $public_status,
+        $reason,
+        round($qual_similarity, 2),
+        round($body_similarity, 2),
+        0,
+        date('Y-m-d H:i:s')
+    ]);
 
-
-if ($saved !== false) {
-
-    // 🔑 Get the newly inserted application ID
     $applicationId = $pdo->lastInsertId();
 
-    // ================= SAVE REFEREES =================
+    /* ===============================
+       2️⃣ GENERATE APPLICANT NUMBER
+    =============================== */
+
+    $year = date('Y');
+    $applicant_number = "EKSU/APP/$year/" .
+        str_pad($applicationId, 4, '0', STR_PAD_LEFT);
+
+    $updateStmt = $pdo->prepare("
+        UPDATE applications
+        SET applicant_number = ?
+        WHERE id = ?
+    ");
+    $updateStmt->execute([$applicant_number, $applicationId]);
+
+    /* ===============================
+       3️⃣ INSERT REFEREES
+    =============================== */
+
     $refStmt = $pdo->prepare("
-        INSERT INTO referees (application_id, name, occupation, email, phone)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO referees (application_id, name, occupation, email, phone, token)
+        VALUES (?, ?, ?, ?, ?, ?)
     ");
 
     foreach ($referees as $ref) {
-        if (!empty($ref['name'])) {
-            $refStmt->execute([
-                $applicationId,
-                $ref['name'],
-                $ref['occupation'],
-                $ref['email'],
-                $ref['phone']
-            ]);
-        }
+
+    if (empty($ref['email']) || empty($ref['name'])) {
+        throw new Exception("Referee data missing.");
     }
 
-    // ================= SEND EMAIL =================
+    $token = bin2hex(random_bytes(32));
+
+    $refStmt->execute([
+        $applicationId,
+        $ref['name'],
+        $ref['occupation'],
+        $ref['email'],
+        $ref['phone'],
+        $token
+    ]);
+
+    // Send referee email
+    if (!sendRefereeMail(
+        $ref['email'],
+        $ref['name'],
+        $first_name . ' ' . $last_name,
+        $job['title'],
+        $token
+    )) {
+        throw new Exception("Referee email failed.");
+    }
+}
+    /* ===============================
+       4️⃣ SEND APPLICANT EMAIL
+    =============================== */
+
     if (function_exists('sendApplicantMail')) {
-        $toEmail = $email;
-        $toName = trim($first_name . ' ' . $last_name);
-        $jobPosition = $job['position'] ?? 'Job Application';
-
-        try {
-            sendApplicantMail($toEmail, $toName, $jobPosition);
-        } catch (\Throwable $e) {
-            @file_put_contents(
-                __DIR__ . '/email_errors.log',
-                date('c') . " - sendApplicantMail error: " . $e->getMessage() . PHP_EOL,
-                FILE_APPEND
-            );
+        if (!sendApplicantMail(
+            $email,
+            trim($first_name . ' ' . $last_name),
+            $job['position'] ?? 'Job Application'
+        )) {
+            throw new Exception("Applicant email failed.");
         }
     }
 
-    // ================= REDIRECT =================
+    /* ===============================
+       5️⃣ COMMIT
+    =============================== */
+
+    $pdo->commit();
+
     header(
         "Location: applicant_dashboard.php?success=1&applicant_number=" .
         urlencode($applicant_number)
     );
     exit();
-} else {
-    $error = "Unable to save your application at the moment. Please try again later.";
+
+} catch (Exception $e) {
+
+    $pdo->rollBack();
+    die("SYSTEM ERROR: " . $e->getMessage());
 }
 
 
 // ----------------- Render form -----------------
 }
+    } // end duplicate check
+$has_applied = hasAppliedBefore($pdo, $email);
+
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -541,6 +574,41 @@ legend {
         padding: 0;
     }
 }
+    /* Modern validation styles */
+.form-group {
+    position: relative;
+    margin-bottom: 18px;
+}
+
+.required-star {
+    color: red;
+    margin-left: 4px;
+}
+
+.error-text {
+    color: red;
+    font-size: 12px;
+    margin-top: -10px;
+    margin-bottom: 10px;
+    display: none;
+}
+
+.valid-check {
+    position: absolute;
+    right: 10px;
+    top: 38px;
+    color: green;
+    font-size: 16px;
+    display: none;
+}
+
+input.valid, select.valid, textarea.valid {
+    border: 1px solid green;
+}
+
+input.invalid, select.invalid, textarea.invalid {
+    border: 1px solid red;
+}
 </style>
 </head>
 <body>
@@ -587,41 +655,78 @@ style="
   🖨️ Print Application
     </button>
 
-  <?php if ($has_applied): ?>
+  <?php if (hasAppliedBefore($pdo, $email)): ?>
     <div class="notice">
-       You have already applied for this job. You cannot apply again.
+        Our records show that you have applied before. You are not allowed to submit another application.
     </div>
-  <?php else: ?>
+<?php else: ?>
+
     <form method="POST" enctype="multipart/form-data" novalidate>
       <!-- Personal -->
       <fieldset>
     <legend>Personal Information</legend>
-
+	<div class="form-group">
+    <label>First Name <span class="required-star">*</span></label>
     <input type="text" name="first_name" placeholder="First Name" required>
-    <input type="text" name="middle_name" placeholder="Middle Name">
-    <input type="text" name="last_name" placeholder="Last Name" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
-    <input type="tel" name="phone" placeholder="Phone Number" required>
+    <label>Middle Name</label>
+    <input type="text" name="middle_name" placeholder="Middle Name">
+
+    <div class="form-group">
+    <label>Last Name <span class="required-star">*</span></label>
+    <input type="text" name="last_name" placeholder="First Name" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
+
+	<div class="form-group">
+    <label>Phone Number <span class="required-star">*</span></label>
+     <input type="tel" name="phone" placeholder="Phone Number" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
     <input type="email" name="email" placeholder="Email Address" value="<?= htmlspecialchars($email) ?>" readonly>
 
-    <label>Date of Birth</label>
+    <div class="form-group">
+    <label>Date of Birth <span class="required-star">*</span></label>
     <input type="date" name="dob" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
+	<div class="form-group">
+    <label>Place of Birth <span class="required-star">*</span></label>
     <input type="text" name="pob" placeholder="Place of Birth" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
-    <label>Gender</label>
+   <div class="form-group">
+    <label>Gender <span class="required-star">*</span></label>
     <select name="gender" required>
         <option value="">-- Select Gender --</option>
         <option value="Male">Male</option>
         <option value="Female">Female</option>
-        <option value="Other">Other</option>
     </select>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
+    <div class="form-group">
+    <label>Nationality <span class="required-star">*</span></label>
     <input type="text" name="nationality" placeholder="Nationality" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
+
+    
 
     <!-- NEW FIELDS START -->
-
+    <div class="form-group">
     <label>Marital Status</label>
     <select name="marital_status" required>
         <option value="">-- Select Marital Status --</option>
@@ -630,24 +735,62 @@ style="
         <option value="Divorced">Divorced</option>
         <option value="Widowed">Widowed</option>
     </select>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
+    
+    <div class="form-group">
+    <label>Number of Children<span class="required-star">*</span></label>
+     <input type="number" name="children" min="0" placeholder="Number of Children" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
-    <input type="number" name="children" min="0" placeholder="Number of Children" required>
+   
 
     <textarea name="permanent_address" rows="3" placeholder="Permanent Contact Address" required></textarea>
 
-
+    <div class="form-group">
+    <label>State of Origin <span class="required-star">*</span></label>
     <input type="text" name="state" placeholder="State of Origin" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
+    <div class="form-group">
+    <label>Home Town<span class="required-star">*</span></label>
     <input type="text" name="home_town" placeholder="Home Town" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
+    
+    <div class="form-group">
+    <label>Local Government Area <span class="required-star">*</span></label>
+     <input type="text" name="lga" placeholder="Local Government Area" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
 
-    <input type="text" name="lga" placeholder="Local Government Area" required>
-
+    <div class="form-group">
+     <label>Disability / Physical Challenge</label>
+<select name="disability" required>
+    <option value="">-- Select Option --</option>
+    <option value="None">None</option>
+    <option value="Visually Impaired">Visually Impaired</option>
+    <option value="Hearing Impaired">Hearing Impaired</option>
+    <option value="Physical Disability">Physical Disability</option>
+    <option value="Other">Other</option>
+</select>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
 </fieldset>
       <!-- Professional -->
       <fieldset>
-    <legend>Professional Information</legend>
+<legend>Professional Information</legend>
 
-    <label>Academic Qualification</label>
+<div class="form-group">
+    <label>Academic Qualification <span class="required-star">*</span></label>
     <select name="academic_qualification" id="academic_qualification" required>
         <option value="">-- Select Qualification --</option>
         <option value="SSCE / O-Level">SSCE / O-Level</option>
@@ -670,26 +813,52 @@ style="
         <option value="PhD">PhD</option>
         <option value="Other">Other (specify)</option>
     </select>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
 
-    <!-- Hidden "Other" qualification textbox -->
-    <input type="text" name="academic_qualification_other" id="academic_qualification_other"
+<div class="form-group">
+    <input type="text" name="academic_qualification_other"
+        id="academic_qualification_other"
         placeholder="Specify qualification"
-        style="display:none; margin-top:8px;">
+        style="display:none;">
+</div>
 
-    <label>Professional Body Registered With</label>
+<div class="form-group">
+    <label>Professional Body Registered With <span class="required-star">*</span></label>
     <input type="text" name="professional_body" placeholder="e.g. COREN, NCS, ICAN" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
 
-    <label>Number of Publications</label>
+<div class="form-group">
+    <label>Number of Publications <span class="required-star">*</span></label>
     <input type="number" name="publications" min="0" placeholder="e.g. 5" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
 
-    <label>Years of Experience</label>
+<div class="form-group">
+    <label>Years of Experience <span class="required-star">*</span></label>
     <input type="number" name="experience" min="0" placeholder="e.g. 3" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
 
-    <label>Cover Letter / Description</label>
+<div class="form-group">
+    <label>Cover Letter / Description <span class="required-star">*</span></label>
     <textarea name="cover_letter" rows="4" placeholder="Write your cover letter here..." required></textarea>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
 
-    <label>Upload CV (PDF or DOCX)</label>
+<div class="form-group">
+    <label>Upload CV (PDF or DOCX) <span class="required-star">*</span></label>
     <input type="file" name="cv" accept=".pdf,.doc,.docx" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
 </fieldset>
 
 
@@ -698,8 +867,13 @@ style="
         <legend>Passport Photograph & Academic Records</legend>
         <p class="small">Upload your passport photograph and list your academic records.</p>
 
-        <label>Passport Photograph (jpg/png)</label>
-        <input type="file" name="passport" accept=".jpg,.jpeg,.png" required>
+        <div class="form-group">
+    <label>Passport Photograph (jpg/png) <span class="required-star">*</span></label>
+    <input type="file" name="passport" accept=".jpg,.jpeg,.png" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+    </div>
+
 
         <hr style="margin:12px 0">
 
@@ -832,175 +1006,276 @@ if (!empty($custom_fields)):
 <?php endif; ?>
 
       <!-- Referees -->
-      <fieldset>
-        <legend>Referee 1</legend>
-        <input type="text" name="ref1_name" placeholder="Full Name" required>
-        <input type="tel" name="ref1_phone" placeholder="Phone Number" required>
-        <input type="email" name="ref1_email" placeholder="Email Address" required>
-        <input type="text" name="ref1_occupation" placeholder="Occupation" required>
-      </fieldset>
+     <fieldset>
+<legend>Referee 1</legend>
+
+<div class="form-group">
+    <label>Full Name <span class="required-star">*</span></label>
+    <input type="text" name="ref1_name" placeholder="Full Name" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Phone Number <span class="required-star">*</span></label>
+    <input type="tel" name="ref1_phone" placeholder="Phone Number" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Email Address <span class="required-star">*</span></label>
+    <input type="email" name="ref1_email" placeholder="Email Address" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Occupation <span class="required-star">*</span></label>
+    <input type="text" name="ref1_occupation" placeholder="Occupation" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+</fieldset>
+
 
       <fieldset>
-        <legend>Referee 2</legend>
-        <input type="text" name="ref2_name" placeholder="Full Name" required>
-        <input type="tel" name="ref2_phone" placeholder="Phone Number" required>
-        <input type="email" name="ref2_email" placeholder="Email Address" required>
-        <input type="text" name="ref2_occupation" placeholder="Occupation" required>
-      </fieldset>
+<legend>Referee 2</legend>
+
+<div class="form-group">
+    <label>Full Name <span class="required-star">*</span></label>
+    <input type="text" name="ref2_name" placeholder="Full Name" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Phone Number <span class="required-star">*</span></label>
+    <input type="tel" name="ref2_phone" placeholder="Phone Number" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Email Address <span class="required-star">*</span></label>
+    <input type="email" name="ref2_email" placeholder="Email Address" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Occupation <span class="required-star">*</span></label>
+    <input type="text" name="ref2_occupation" placeholder="Occupation" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+</fieldset>
 
       <fieldset>
-        <legend>Referee 3</legend>
-        <input type="text" name="ref3_name" placeholder="Full Name" required>
-        <input type="tel" name="ref3_phone" placeholder="Phone Number" required>
-        <input type="email" name="ref3_email" placeholder="Email Address" required>
-        <input type="text" name="ref3_occupation" placeholder="Occupation" required>
-      </fieldset>
+<legend>Referee 3</legend>
 
-      <button type="submit">Submit Application</button>
+<div class="form-group">
+    <label>Full Name <span class="required-star">*</span></label>
+    <input type="text" name="ref3_name" placeholder="Full Name" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Phone Number <span class="required-star">*</span></label>
+    <input type="tel" name="ref3_phone" placeholder="Phone Number" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Email Address <span class="required-star">*</span></label>
+    <input type="email" name="ref3_email" placeholder="Email Address" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+<div class="form-group">
+    <label>Occupation <span class="required-star">*</span></label>
+    <input type="text" name="ref3_occupation" placeholder="Occupation" required>
+    <span class="valid-check">✔</span>
+    <div class="error-text">This field is required</div>
+</div>
+
+</fieldset>
+
+
+    <button type="submit">Submit Application</button>
     </form>
   <?php endif; ?>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form');
+document.addEventListener("DOMContentLoaded", function () {
+
+    const form = document.querySelector("form");
     if (!form) return;
 
-    // Manage dynamic academic records
+    /* ===============================
+       ACADEMIC RECORDS (YOUR LOGIC)
+       =============================== */
     const addBtn = document.getElementById('addAcademicBtn');
     const container = document.getElementById('academicRecordsContainer');
 
-    addBtn.addEventListener('click', function() {
-        const block = document.createElement('div');
-        block.className = 'academic-record';
-        block.innerHTML = `
-            <label>Institution</label>
-            <input type="text" name="inst_name[]" placeholder="Name of Institution" required>
+    if (addBtn && container) {
+        addBtn.addEventListener('click', function () {
 
-            <label>Qualification Obtained</label>
-            <input type="text" name="inst_qualification[]" placeholder="e.g. B.Sc Computer Science" required>
+            const block = document.createElement('div');
+            block.className = 'academic-record';
 
-            <div style="display:flex;gap:10px">
-              <div style="flex:1">
-                <label>Date From</label>
-                <input type="text" name="inst_from[]" placeholder="YYYY" required>
-              </div>
-              <div style="flex:1">
-                <label>Date To</label>
-                <input type="text" name="inst_to[]" placeholder="YYYY or present" required>
-              </div>
-            </div>
+           block.innerHTML = `
+    <label>Institution</label>
+    <input type="text" name="inst_name[]" required>
 
-            <label>Upload Certificate (optional)</label>
-            <input type="file" name="institution_certificate[]" accept=".pdf,.jpg,.jpeg,.png">
+    <label>Qualification Obtained</label>
+    <input type="text" name="inst_qualification[]" required>
 
-            <button type="button" class="remove-acad" onclick="this.closest('.academic-record').remove()">Remove</button>
-        `;
-        container.appendChild(block);
-    });
-const qualSelect = document.getElementById('academic_qualification');
-const otherField = document.getElementById('academic_qualification_other');
+    <div style="display:flex; gap:10px;">
+        <input type="text" name="inst_month_from[]" placeholder="MM" required>
+        <input type="text" name="inst_year_from[]" placeholder="YYYY" required>
+        <input type="text" name="inst_month_to[]" placeholder="MM">
+        <input type="text" name="inst_year_to[]" placeholder="YYYY">
+    </div>
 
-qualSelect.addEventListener('change', function () {
-    if (this.value === 'Other') {
-        otherField.style.display = 'block';
-        otherField.required = true;
-    } else {
-        otherField.style.display = 'none';
-        otherField.required = false;
-        otherField.value = '';
+    <input type="file" name="institution_certificate[]">
+
+    <button type="button" class="remove-acad">Remove</button>
+`;
+            container.appendChild(block);
+
+            block.querySelector(".remove-acad").addEventListener("click", function () {
+                block.remove();
+            });
+        });
     }
+
+    /* ===============================
+       VALIDATION HELPERS
+       =============================== */
+    function getRequiredFields() {
+        return form.querySelectorAll(
+            "input[required], select[required], textarea[required]"
+        );
+    }
+
+    function isValid(field) {
+        if (field.type === "file") {
+            return field.files.length > 0;
+        }
+        if (field.tagName === "SELECT") {
+            return field.value !== "";
+        }
+        return field.value.trim() !== "";
+    }
+
+    function showError(field) {
+        field.classList.add("invalid");
+        field.classList.remove("valid");
+
+        const group = field.closest(".form-group");
+        if (group) {
+            const errorText = group.querySelector(".error-text");
+            const checkIcon = group.querySelector(".valid-check");
+            if (errorText) errorText.style.display = "block";
+            if (checkIcon) checkIcon.style.display = "none";
+        }
+    }
+
+    function showValid(field) {
+        field.classList.remove("invalid");
+        field.classList.add("valid");
+
+        const group = field.closest(".form-group");
+        if (group) {
+            const errorText = group.querySelector(".error-text");
+            const checkIcon = group.querySelector(".valid-check");
+            if (errorText) errorText.style.display = "none";
+            if (checkIcon) checkIcon.style.display = "inline";
+        }
+    }
+
+    /* ===============================
+       REAL-TIME VALIDATION
+       =============================== */
+    form.addEventListener("input", function (e) {
+        const field = e.target;
+        if (field.hasAttribute("required")) {
+            isValid(field) ? showValid(field) : showError(field);
+        }
+    });
+
+    form.addEventListener("change", function (e) {
+        const field = e.target;
+        if (field.hasAttribute("required")) {
+            isValid(field) ? showValid(field) : showError(field);
+        }
+    });
+    // save and continue later
+document.getElementById("saveDraftBtn")?.addEventListener("click", function () {
+
+    const confirmDraft = confirm(
+        "Your application will be saved as a draft.\n\nYou can continue later.\nProceed?"
+    );
+
+    if (!confirmDraft) return;
+
+    // Add hidden input to mark draft
+    let draftInput = document.createElement("input");
+    draftInput.type = "hidden";
+    draftInput.name = "is_draft";
+    draftInput.value = "1";
+
+    document.querySelector("form").appendChild(draftInput);
+    document.querySelector("form").submit();
 });
 
-    form.addEventListener('submit', function(e) {
-        e.preventDefault(); // prevent default submission
+    /* ===============================
+       FINAL SUBMIT HANDLER
+       =============================== */
+    form.addEventListener("submit", function (e) {
 
-        // Collect required fields
-        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
-        let allFilled = true;
-        let missingFields = [];
+        const requiredFields = getRequiredFields();
+        let firstInvalid = null;
 
         requiredFields.forEach(field => {
-            // For file inputs, check files length
-            if (field.type === 'file') {
-                if (field.files.length === 0) {
-                    allFilled = false;
-                    missingFields.push(field.name || 'file');
-                }
+            if (!isValid(field)) {
+                showError(field);
+                if (!firstInvalid) firstInvalid = field;
             } else {
-                if (!field.value.trim()) {
-                    allFilled = false;
-                    missingFields.push(field.placeholder || field.name);
-                }
+                showValid(field);
             }
         });
 
-        if (!allFilled) {
-            alert("Please fill in all required fields:\n" + missingFields.join(", "));
+        // ❌ Stop if any required field is empty
+        if (firstInvalid) {
+            e.preventDefault();
+            firstInvalid.focus();
+            firstInvalid.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+            alert("Please complete all required fields before submitting.");
             return;
         }
-        // Confirm submission
+
+        // ✅ Confirm submission
         const confirmSubmit = confirm(
-            "Are you sure you want to submit your application?\n" +
-            "You can cancel and modify your application before submitting."
+            "Are you sure you want to submit your application?\n\nClick OK to submit or Cancel to modify."
         );
 
-        if (confirmSubmit) {
-            // disable submit button to help prevent double submits
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Submitting...';
-            }
-            form.submit(); // submit the form if confirmed
-        } else {
+        if (!confirmSubmit) {
+            e.preventDefault();
             alert("You can now review and modify your application.");
         }
     });
-});
-// Handle Present checkbox toggle
-document.querySelectorAll(".present-checkbox").forEach((chk) => {
-    chk.addEventListener("change", function () {
 
-        const container = this.closest("div");
-        const monthSelect = container.querySelector(".month-to");
-        const yearSelect  = container.querySelector(".year-to");
-
-        if (this.checked) {
-            // Disable month & year
-            monthSelect.disabled = true;
-            yearSelect.disabled = true;
-
-            // Clear existing values
-            monthSelect.value = "";
-            yearSelect.value = "";
-        } else {
-            monthSelect.disabled = false;
-            yearSelect.disabled = false;
-        }
-    });
-});
-
-// Before submitting, convert "Present" rows correctly
-document.querySelector("form").addEventListener("submit", function () {
-    document.querySelectorAll(".present-checkbox").forEach((chk) => {
-        const container = chk.closest("div");
-
-        if (chk.checked) {
-            // Create hidden fields so the server receives consistent values
-            const hiddenMonth = document.createElement("input");
-            hiddenMonth.type = "hidden";
-            hiddenMonth.name = "inst_month_to[]";
-            hiddenMonth.value = "Present";
-            container.appendChild(hiddenMonth);
-
-            const hiddenYear = document.createElement("input");
-            hiddenYear.type = "hidden";
-            hiddenYear.name = "inst_year_to[]";
-            hiddenYear.value = "Present";
-            container.appendChild(hiddenYear);
-        }
-    });
 });
 </script>
 
